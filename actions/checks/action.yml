@@ -1,0 +1,31 @@
+name: "hark checks"
+description: "Run all the changelog-specific validation a PR might need"
+
+# One-stop shop for changelog validations.
+#
+# The calling job has to provide:
+#
+#   permissions:
+#     contents: read       # for the checkout the last three steps read changefiles from
+#     pull-requests: read  # to ask which files the pull request touches
+#   steps:
+#     - uses: actions/checkout@...
+#
+# and the workflow has to add `edited` to the default pull_request event types, so that
+# toggling an opt-out box re-runs the checks:
+#
+#   on:
+#     pull_request:
+#       types: [opened, synchronize, reopened, edited]
+#
+# Neither can be declared here: a composite action cannot grant its own permissions or
+# declare its own triggers.
+
+runs:
+  using: "composite"
+  steps:
+    # Ordered cheapest to most expensive
+    - uses: $/actions/require-changefile
+    - uses: $/actions/require-migration-guide
+    - uses: $/actions/check-github-links
+    - uses: $/actions/validate-changefiles

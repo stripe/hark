@@ -1,0 +1,10 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - staticcheck
+    - errcheck
+    - govet
+    - ineffassign
+    - unused

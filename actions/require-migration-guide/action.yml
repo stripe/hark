@@ -1,0 +1,101 @@
+name: "Require a migration guide"
+description: "Fail a pull request that adds a breaking changefile without touching a migration guide"
+
+# Though the `.hark/migration-guides/` directory isn't read by `hark` directly, this seemed like the best home for this check.
+# Basically, if you write a breaking changefile, you should also edit a migration guide file
+# The openapi bot is exempt from this check, since it routinely adds breaking changes and the migration guide is covered elsewhere
+
+runs:
+  using: "composite"
+  steps:
+    - name: Require a migration guide for breaking changes
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        set -f
+        for exempt in $EXEMPT_AUTHORS; do
+          if [ "$PR_AUTHOR" = "$exempt" ]; then
+            echo "${PR_AUTHOR} is exempt from this check."
+            exit 0
+          fi
+        done
+        set +f
+
+        FILES="${RUNNER_TEMP}/pr-files.json"
+        gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}/files" --paginate >"$FILES"
+
+        added=$(jq -r '.[] | select(.status == "added") | .filename' "$FILES" |
+          grep -E '^\.hark/changes/[^/]+\.change\.md$' || true)
+
+        # Any file under the directory counts, at any depth, whether it was added
+        # or edited
+        guides=$(jq -r '.[]
+            | select(.status == "added" or .status == "modified"
+                     or .status == "changed" or .status == "renamed")
+            | .filename' "$FILES" |
+          grep -E '^\.hark/migration-guides/.+' || true)
+
+        # Only care if we find an explicit `is_breaking: true`
+        breaking=""
+        while IFS= read -r path; do
+          [ -n "$path" ] || continue
+          if [ ! -f "$path" ]; then
+            echo "::error::${path} is listed as added but is not in the checkout. This action needs actions/checkout to run first."
+            exit 1
+          fi
+          if awk '
+                { sub(/\r$/, "") }
+                NR == 1 { if ($0 != "---") exit 1; infm = 1; next }
+                infm && $0 == "---" { infm = 0; next }
+                infm && /^is_breaking:/ {
+                  v = $0
+                  sub(/^is_breaking:[ \t]*/, "", v)
+                  sub(/[ \t]*$/, "", v)
+                  if (v != "false" && v != "False" && v != "FALSE" && v != "") found = 1
+                }
+                END { exit found ? 0 : 1 }
+              ' "$path"; then
+            breaking="${breaking}${path}"$'\n'
+          fi
+        done <<<"$added"
+
+        if [ -z "$breaking" ]; then
+          # The files endpoint stops at 3000 entries, so we can't be sure if a big PR has one
+          # We'll fail and leave it up to the reviewer to confirm
+          if [ "${CHANGED_FILES:-0}" -ge 3000 ]; then
+            echo "::error::This pull request touches ${CHANGED_FILES} files and GitHub only reports the first 3000, so this check cannot tell whether it adds a breaking changefile. Merge through this failure if needed."
+            exit 1
+          fi
+          echo "no breaking changefiles added; no migration guide needed."
+          exit 0
+        fi
+
+        echo "this pull request adds breaking changefiles:"
+        while IFS= read -r path; do
+          [ -n "$path" ] && echo "  ${path}"
+        done <<<"$breaking"
+
+        if [ -n "$guides" ]; then
+          echo "and touches:"
+          while IFS= read -r path; do
+            echo "  ${path}"
+          done <<<"$guides"
+          exit 0
+        fi
+
+        TRUNCATED=""
+        if [ "${CHANGED_FILES:-0}" -ge 3000 ]; then
+          TRUNCATED=" (this pull request touches ${CHANGED_FILES} files and GitHub only reports the first 3000, so a guide may have been missed)"
+        fi
+
+        echo "::error::This pull request adds a breaking changefile but touches nothing in .hark/migration-guides/${TRUNCATED}. Please add upgrade instructions for users."
+        exit 1
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        # Whitespace-separated logins
+        EXEMPT_AUTHORS: "stripe-openapi[bot]"

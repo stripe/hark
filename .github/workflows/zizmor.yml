@@ -1,0 +1,30 @@
+on: [push, pull_request]
+name: Workflow security
+
+permissions: {}
+
+jobs:
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          # this controls whether zizmor plugs into GH's "advanced security" reporting
+          # https://docs.github.com/en/get-started/learning-about-github/about-github-advanced-security
+          # it's simpler to just log issues and fail the check, so we opt out
+          advanced-security: false
+          # Mutually exclusive with advanced-security. Reports findings as inline
+          # annotations on the pull request instead of in the security tab.
+          annotations: true
+          # only bother us for actual issues
+          min-severity: high
+          # The action defaults to downloading the latest zizmor. Pinning the action's commit does not pin
+          # the binary it downloads, and an unpinned binary can change what CI
+          # enforces with no review on our side.
+          version: 1.29.0

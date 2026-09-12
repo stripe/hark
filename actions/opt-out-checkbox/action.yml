@@ -1,0 +1,50 @@
+name: "Opt-out checkbox"
+description: "Report whether a pull request's description has a given opt-out checkbox checked"
+
+# A generic action to support exiting early if a PR body has a specifically-named checkbox checked
+
+inputs:
+  checkbox:
+    # Matched literally, so a name containing regex punctuation is still safe.
+    description: "Name of the checkbox to look for"
+    required: true
+
+outputs:
+  skipped:
+    description: "'true' when the checkbox is present and checked"
+    value: ${{ steps.match.outputs.skipped }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Look for the checkbox
+      id: match
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        # `pull_request` only, for security reasons
+        if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+          echo "::error::This check only runs on pull_request, not ${GITHUB_EVENT_NAME}."
+          exit 1
+        fi
+
+        # Anchored at the start of a line and compared as a literal string, so
+        # the checkbox name is never read as a pattern. GitHub writes `[x]`, but
+        # a person editing the description by hand may well type `[X]`.
+        if printf '%s\n' "$PR_BODY" | tr -d '\r' | awk -v needle="- [x] \`${INPUTS_CHECKBOX}\`" '
+              {
+                line = $0
+                sub(/^- \[X\] /, "- [x] ", line)
+                if (index(line, needle) == 1) { found = 1 }
+              }
+              END { exit found ? 0 : 1 }
+            '; then
+          echo "\`${INPUTS_CHECKBOX}\` is checked; skipping this check."
+          echo "skipped=true" >>"$GITHUB_OUTPUT"
+        else
+          echo "skipped=false" >>"$GITHUB_OUTPUT"
+        fi
+      env:
+        PR_BODY: ${{ github.event.pull_request.body }}
+        INPUTS_CHECKBOX: ${{ inputs.checkbox }}
