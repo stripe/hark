@@ -26,44 +26,50 @@ const versionFormatHint = "expected major.minor.patch, optionally followed by an
 
 // validates the holistic state state of a repo. See the individual check* functions for what we look for
 func Validate(ctx context.Context, opts Options) error {
+	_, err := validate(ctx, opts)
+	return err
+}
+
+// validate powers the public [Validate] and returns all of the validated changefiles
+func validate(ctx context.Context, opts Options) ([]changefile.ReadResult, error) {
 	opts = opts.withDefaults()
 
 	// read every changefile, keeping each one's outcome rather than stopping at the
 	// first that will not parse
 	changefiles, err := changefile.ReadAll(ctx, opts.Fs, opts.changesDir(), opts.ReadOptions)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(changefiles) == 0 {
 		if _, err := fmt.Fprintf(opts.Out, "no changefiles found in %s\n", opts.changesDir()); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	releasesFile, err := releases.ReadFile(opts.Fs, opts.releasesPath())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// generate reports
 	changefileReports := validateChangefiles(changefiles, releasesFile)
 	introReports, err := checkIntros(opts)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	metadataReports := checkMetadata(releasesFile)
 
 	// print details of issues
 	numBadChangefiles, err := printReports(opts, changefileReports)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	numBadIntros, err := printReports(opts, introReports)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	numBadMetadata, err := printReports(opts, metadataReports)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// summarize and error out if we found anything
@@ -78,12 +84,12 @@ func Validate(ctx context.Context, opts Options) error {
 		errs = append(errs, fmt.Errorf("%s has invalid metadata", releasesFile.SourcePath))
 	}
 	if len(errs) > 0 {
-		return errors.Join(errs...)
+		return nil, errors.Join(errs...)
 	}
 
 	// return successfully
 	_, err = fmt.Fprintf(opts.Out, "validated %d changefiles\n", len(changefiles))
-	return err
+	return changefiles, err
 }
 
 // printReports writes every report that had an error, returning the number it wrote.
@@ -211,7 +217,7 @@ func checkIntros(opts Options) ([]fileReport, error) {
 
 // returns one [fileReport] per changefile, in sorted path order.
 func validateChangefiles(results []changefile.ReadResult, releasesFile *releases.File) []fileReport {
-	// Go has no [].map(...), so here we are
+	// Go has no `[].map(...)`, so here we are
 	reports := make([]fileReport, len(results))
 	for i, r := range results {
 		reports[i] = validateChangefile(r, releasesFile)

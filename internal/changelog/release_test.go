@@ -3,6 +3,7 @@ package changelog
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,13 @@ import (
 // clock stopped on a known date.
 func releaseFixture(t *testing.T, versionsJSON string, changefiles map[string]string) (afero.Fs, Options) {
 	t.Helper()
+
+	// Release validates the repo before it writes anything, and validate wants metadata.
+	// Tests that care about the channel pass their own; the rest get GA so they can be
+	// about the release itself.
+	if !strings.Contains(versionsJSON, `"metadata"`) {
+		versionsJSON = strings.Replace(versionsJSON, "{", "{"+gaMetadata, 1)
+	}
 
 	fs := buildFixture(t, versionsJSON, changefiles)
 	return fs, Options{
@@ -195,19 +203,44 @@ func TestRelease_UsesAPreCreatedEntry(t *testing.T) {
 	assert.Equal(t, "1.1.0", read(t, fs, changesFixtureDir+"/2026-09-08_xavdid_add-widgets.change.md").ReleasedInVersion)
 }
 
-// These files record releases that have already gone out, so an existing entry
-// keeps its position even when its date says it should sort elsewhere.
-func TestRelease_APreCreatedEntryKeepsItsPosition(t *testing.T) {
-	fs, opts := releaseFixture(t, `{"releases":[
-		{"version":"1.0.0","released_on":"2026-01-15"},
-		{"version":"1.1.0","released_on":"2026-09-01"}
-	]}`, nil)
+// A release compiles the changelog readers see and stamps every pending changefile, so a
+// repo that does not validate is not one to release from.
+func TestRelease_RefusesWhenTheRepoDoesNotValidate(t *testing.T) {
+	fs, opts := releaseFixture(t, `{"releases":[]}`, map[string]string{
+		"2026-09-08_xavdid_add-widgets.change.md": "---\ntitle: \"" + placeholderTitle + "\"\n---\n",
+	})
 
-	require.NoError(t, Release(context.Background(), opts, releases.Release{Version: "1.1.0"}))
+	err := Release(context.Background(), opts, releases.Release{Version: "1.0.0"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not releasing 1.0.0")
 
-	got := releasedVersions(t, fs)
-	assert.Equal(t, []string{"1.0.0", "1.1.0"}, []string{got.Releases[0].Version, got.Releases[1].Version})
-	assert.Len(t, got.Releases, 2, "the entry should be reused, not duplicated")
+	// And nothing was written: no entry recorded, no changefile stamped, no changelog.
+	assert.Empty(t, releasedVersions(t, fs).Releases)
+	assert.Empty(t, read(t, fs, changesFixtureDir+"/2026-09-08_xavdid_add-widgets.change.md").ReleasedInVersion)
+
+	exists, err := afero.Exists(fs, changelogPath)
+	require.NoError(t, err)
+	assert.False(t, exists, "the changelog should not have been compiled")
+}
+
+// These files record releases that have already gone out, so an existing entry keeps its
+// position even when its date says it should sort elsewhere.
+//
+// Against placeRelease rather than Release: showing that nothing re-sorts needs a file
+// that is already out of order, which is a state Release now refuses to run on at all.
+func TestPlaceRelease_APreCreatedEntryKeepsItsPosition(t *testing.T) {
+	file := &releases.File{Releases: []releases.Release{
+		{Version: "1.0.0", ReleasedOn: "2026-01-15"},
+		{Version: "1.1.0", ReleasedOn: "2026-09-01"},
+	}}
+
+	entry, err := placeRelease(file, releases.Release{Version: "1.1.0"}, "2026-09-09")
+	require.NoError(t, err)
+
+	assert.Equal(t, "1.1.0", entry.Version)
+	assert.Equal(t, []string{"1.0.0", "1.1.0"},
+		[]string{file.Releases[0].Version, file.Releases[1].Version})
+	assert.Len(t, file.Releases, 2, "the entry should be reused, not duplicated")
 }
 
 // A blank field on a pre-created entry is one the release is expected to fill in.

@@ -14,9 +14,9 @@ import (
 	"github.com/stripe/hark/changefile"
 )
 
-// validate runs Validate over fs and returns everything it printed along with its
+// runValidate runs Validate over fs and returns everything it printed along with its
 // error.
-func validate(t *testing.T, fs afero.Fs) (string, error) {
+func runValidate(t *testing.T, fs afero.Fs) (string, error) {
 	t.Helper()
 
 	var out bytes.Buffer
@@ -38,7 +38,7 @@ func TestValidate_CleanTree(t *testing.T) {
 			"2026-01-13_anniel_fix-retries.change.md": "---\ntitle: \"Fix retries\"\n---\n",
 		})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.NoError(t, err)
 	assert.Contains(t, out, "validated 2 changefiles")
 }
@@ -51,7 +51,7 @@ func TestValidate_RejectsDuplicateReleases(t *testing.T) {
 		{"version":"1.0.0","released_on":"2026-01-15"}
 	]}`, map[string]string{"2026-01-14_xavdid_add-widgets.change.md": goodChangefile})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 	assert.Contains(t, out, "1.0.0 (2026-01-20) and 1.0.0 (2026-01-15) have the same version")
 }
@@ -72,7 +72,7 @@ func TestValidate_RejectsAPlaceholderTitle(t *testing.T) {
 					"2026-01-14_xavdid_add-widgets.change.md": "---\ntitle: \"" + title + "\"\n---\n",
 				})
 
-			out, err := validate(t, fs)
+			out, err := runValidate(t, fs)
 			require.Error(t, err)
 			assert.Contains(t, out, "title still starts with FIXME")
 		})
@@ -86,7 +86,7 @@ func TestValidate_AllowsFixmeLaterInATitle(t *testing.T) {
 			"2026-01-14_xavdid_add-widgets.change.md": "---\ntitle: \"Remove a stale FIXME comment\"\n---\n",
 		})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.NoError(t, err)
 	assert.NotContains(t, out, "FIXME")
 }
@@ -101,7 +101,7 @@ func TestValidate_RejectsALinkToAnotherRepo(t *testing.T) {
 				"pr_url: \"https://github.com/stripe/stripe-python/pull/42\"\n---\n",
 		})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 	assert.Contains(t, out, "pr_url names stripe/stripe-python, but this repo is stripe/stripe-go")
 }
@@ -117,7 +117,7 @@ func TestValidate_RejectsAnIssueLinkToAnotherRepo(t *testing.T) {
 				"  - \"https://github.com/stripe/stripe-ruby/issues/2\"\n---\n",
 		})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 	assert.Contains(t, out, "github_issues_resolved[1] names stripe/stripe-ruby")
 	assert.NotContains(t, out, "github_issues_resolved[0]", "the first one is fine")
@@ -138,7 +138,7 @@ func TestValidate_RejectsALinkThatIsNotAGithubRepo(t *testing.T) {
 						"pr_url: \"" + link + "\"\n---\n",
 				})
 
-			out, err := validate(t, fs)
+			out, err := runValidate(t, fs)
 			require.Error(t, err)
 			assert.Contains(t, out, "pr_url is not a github.com URL naming a repository")
 		})
@@ -154,7 +154,7 @@ func TestValidate_AcceptsALinkToThisRepo(t *testing.T) {
 				"github_issues_resolved:\n  - \"https://github.com/stripe/stripe-go/issues/7\"\n---\n",
 		})
 
-	_, err := validate(t, fs)
+	_, err := runValidate(t, fs)
 	require.NoError(t, err)
 }
 
@@ -167,7 +167,7 @@ func TestValidate_ReportsAMalformedLinkOnlyOnce(t *testing.T) {
 				"pr_url: \"not-a-url\"\n---\n",
 		})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 	assert.Contains(t, out, "pr_url is not a valid URL")
 	assert.NotContains(t, out, "not a github.com URL")
@@ -181,7 +181,7 @@ func TestValidate_ReportsEveryProblemInAFile(t *testing.T) {
 			"oops.change.md": "---\npr_url: \"not-a-url\"\nreleased_in_version: \"9.9.9\"\n---\n",
 		})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 
 	assert.Contains(t, out, "title is required")
@@ -201,7 +201,7 @@ func TestValidate_ReportsProblemsAcrossFiles(t *testing.T) {
 			"2026-01-13_xavdid_fine.change.md":        goodChangefile,
 		})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 
 	assert.Contains(t, out, "unparseable")
@@ -216,7 +216,7 @@ func TestValidate_CatchesABadFilename(t *testing.T) {
 	fs := buildFixture(t, `{`+gaMetadata+`"releases":[{"version":"1.0.0","released_on":"2026-01-15"}]}`,
 		map[string]string{"my-change.change.md": goodChangefile})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 	assert.Contains(t, out, "my-change.change.md")
 }
@@ -229,7 +229,7 @@ func TestValidate_CatchesAnUnknownVersion(t *testing.T) {
 			"2026-01-14_xavdid_add-widgets.change.md": "---\ntitle: \"Add widgets\"\nreleased_in_version: \"9.9.9\"\n---\n",
 		})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 	assert.Contains(t, out, `released_in_version "9.9.9" is not in .hark/releases.json`)
 }
@@ -244,7 +244,7 @@ func TestValidate_CatchesAMisspelledVersion(t *testing.T) {
 					"2026-01-14_xavdid_add-widgets.change.md": "---\ntitle: \"Add widgets\"\nreleased_in_version: \"" + version + "\"\n---\n",
 				})
 
-			out, err := validate(t, fs)
+			out, err := runValidate(t, fs)
 			require.Error(t, err)
 			assert.Contains(t, out, `released_in_version "`+version+`" is not a valid version`)
 			assert.NotContains(t, out, "is not in .hark/releases.json")
@@ -257,7 +257,7 @@ func TestValidate_CatchesAMisspelledVersion(t *testing.T) {
 func TestValidate_NoChangefiles(t *testing.T) {
 	fs := buildFixture(t, `{`+gaMetadata+`"releases":[]}`, map[string]string{})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.NoError(t, err)
 	assert.Contains(t, out, "no changefiles found")
 }
@@ -266,7 +266,7 @@ func TestValidate_MissingChangesDirectory(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	require.NoError(t, afero.WriteFile(fs, versionsFixturePath, []byte(`{"releases":[]}`), 0o644))
 
-	_, err := validate(t, fs)
+	_, err := runValidate(t, fs)
 	require.Error(t, err)
 }
 
@@ -278,7 +278,7 @@ func TestValidate_GroupsByFileInPathOrder(t *testing.T) {
 		"2026-01-12_xavdid_second.change.md": "---\nsection: \"Added\"\n---\n",
 	})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 
 	assert.Less(t, strings.Index(out, "first"), strings.Index(out, "second"))
@@ -293,7 +293,7 @@ func TestValidate_CatchesAMisnamedIntro(t *testing.T) {
 		map[string]string{"2026-01-14_xavdid_add-widgets.change.md": goodChangefile})
 	require.NoError(t, afero.WriteFile(fs, introsFixtureDir+"/1.0.0.md", []byte("Prose.\n"), 0o644))
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 
 	assert.Contains(t, out, "1.0.0.md")
@@ -309,7 +309,7 @@ func TestValidate_AcceptsAnIntroForAnUnreleasedVersion(t *testing.T) {
 		map[string]string{"2026-01-14_xavdid_add-widgets.change.md": goodChangefile})
 	writeIntro(t, fs, "2.0.0", "Drafted for the next major.\n")
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.NoError(t, err)
 	assert.Contains(t, out, "validated 1 changefiles")
 }
@@ -319,7 +319,7 @@ func TestValidate_AcceptsAWellNamedIntro(t *testing.T) {
 		map[string]string{"2026-01-14_xavdid_add-widgets.change.md": goodChangefile})
 	writeIntro(t, fs, "1.0.0", "Prose.\n")
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.NoError(t, err)
 	assert.Contains(t, out, "validated 1 changefiles")
 }
@@ -330,7 +330,7 @@ func TestValidate_ReportsBothKindsOfProblem(t *testing.T) {
 		map[string]string{"2026-01-14_xavdid_broken.change.md": "---\nsection: \"Added\"\n---\n"})
 	require.NoError(t, afero.WriteFile(fs, introsFixtureDir+"/1.0.0.md", []byte("Prose.\n"), 0o644))
 
-	_, err := validate(t, fs)
+	_, err := runValidate(t, fs)
 	require.Error(t, err)
 	// One error per category, joined — so neither line can crowd the other out.
 	assert.Contains(t, err.Error(), "1/1 changefiles are invalid")
@@ -365,7 +365,7 @@ func TestValidate_RejectsAnUnknownLanguage(t *testing.T) {
 		`"releases":[{"version":"1.0.0","released_on":"2026-01-15"}]}`,
 		map[string]string{"2026-01-14_xavdid_add-widgets.change.md": goodChangefile})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 	assert.Contains(t, out, `metadata.language "golang" is not one of`)
 	// Listed in the canonical SDK order, not alphabetically.
@@ -379,7 +379,7 @@ func TestValidate_AcceptsEverySDKLanguage(t *testing.T) {
 				`"releases":[{"version":"1.0.0","released_on":"2026-01-15"}]}`,
 				map[string]string{"2026-01-14_xavdid_add-widgets.change.md": goodChangefile})
 
-			_, err := validate(t, fs)
+			_, err := runValidate(t, fs)
 			require.NoError(t, err)
 		})
 	}
@@ -394,7 +394,7 @@ func TestValidate_IntroCountIsOutOfAllIntros(t *testing.T) {
 	require.NoError(t, afero.WriteFile(fs, introsFixtureDir+"/nope.md", []byte("x\n"), 0o644))
 	require.NoError(t, afero.WriteFile(fs, introsFixtureDir+"/also-wrong.md", []byte("x\n"), 0o644))
 
-	_, err := validate(t, fs)
+	_, err := runValidate(t, fs)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "2/3 intros are invalid")
 }
@@ -409,7 +409,7 @@ func TestValidate_ReportsEveryMetadataProblem(t *testing.T) {
 		`"releases":[{"version":"1.0.0-beta.1","released_on":"2026-01-15"}]}`,
 		map[string]string{"2026-01-14_xavdid_broken.change.md": "---\nsection: \"Added\"\n---\n"})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 
 	assert.Contains(t, out, `metadata.language "golang" is not one of`)
@@ -430,7 +430,7 @@ func TestValidate_ReportsReleasesInTheWrongChannel(t *testing.T) {
 		`{"version":"1.0.0","released_on":"2026-01-15"}]}`,
 		map[string]string{"2026-01-14_xavdid_add-widgets.change.md": goodChangefile})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 	assert.Contains(t, out, `metadata.channel is "ga" but 1/3 releases belong to a different channel (including 1.1.0-beta.1)`)
 }
@@ -441,7 +441,7 @@ func TestValidate_RejectsAnUnknownChannel(t *testing.T) {
 		`"releases":[{"version":"1.0.0","released_on":"2026-01-15"}]}`,
 		map[string]string{"2026-01-14_xavdid_add-widgets.change.md": goodChangefile})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 	assert.Contains(t, out, `metadata.channel "stable" is not one of: ga, beta, private-preview`)
 	// And it does not go on to blame the releases, which are fine.
@@ -459,7 +459,7 @@ func TestValidate_CapsTheReleasesItNames(t *testing.T) {
 		strings.Join(entries, ",")+`]}`,
 		map[string]string{"2026-01-14_xavdid_add-widgets.change.md": "---\ntitle: \"Add widgets\"\n---\n"})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 	assert.Contains(t, out, "10/10 releases belong to a different channel")
 	// Three named, not ten.
@@ -475,7 +475,7 @@ func TestValidate_RejectsAnUnreadableVersion(t *testing.T) {
 		`{"version":"2.1.0rc1","released_on":"2013-01-01"}]}`,
 		map[string]string{"2026-01-14_xavdid_add-widgets.change.md": "---\ntitle: \"Add widgets\"\n---\n"})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 	assert.Contains(t, out, "1/2 releases are not valid versions (including 2.1.0rc1)")
 
@@ -492,7 +492,7 @@ func TestValidate_SeparatesUnreadableFromMisplaced(t *testing.T) {
 		`{"version":"not-a-version","released_on":"2026-01-15"}]}`,
 		map[string]string{"2026-01-14_xavdid_add-widgets.change.md": "---\ntitle: \"Add widgets\"\n---\n"})
 
-	out, err := validate(t, fs)
+	out, err := runValidate(t, fs)
 	require.Error(t, err)
 	assert.Contains(t, out, "1/3 releases are not valid versions (including not-a-version)")
 	assert.Contains(t, out, "1/3 releases belong to a different channel (including 1.1.0-beta.1)")

@@ -15,6 +15,9 @@ import (
 // Release cuts a new release from the unreleased changefiles.
 // It stamps them with the version, adds the release to the releases file, and rebuilds the changelog.
 //
+// The repo has to pass [Validate] first, so a release cannot bake a placeholder title or
+// a half-written changefile into the changelog.
+//
 // An entry for the version may already exist. Existing values are overwritten with new ones.
 func Release(ctx context.Context, opts Options, release releases.Release) error {
 	opts = opts.withDefaults()
@@ -40,27 +43,29 @@ func Release(ctx context.Context, opts Options, release releases.Release) error 
 			release.Version, versionChannel, releaseFile.SourcePath, fileChannel)
 	}
 
+	// Validate everything before proceeding with the release
+	validChangefiles, err := validate(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("not releasing %s: %w", release.Version, err)
+	}
+
 	entry, err := placeRelease(releaseFile, release, opts.today())
 	if err != nil {
 		return err
 	}
 	inherit(entry, releaseFile)
 
-	changes, err := changefile.ReadEvery(ctx, opts.Fs, opts.changesDir(), opts.ReadOptions)
-	if err != nil {
-		return err
-	}
-
+	// filter all the valid changefiles to find the pending ones
 	var pending []*changefile.Changefile
-	for _, c := range changes {
-		if c.ReleasedInVersion == "" {
-			pending = append(pending, c)
+	for _, r := range validChangefiles {
+		if r.Changefile.ReleasedInVersion == "" {
+			pending = append(pending, r.Changefile)
 		}
 	}
 
-	// The releases file goes first.
+	// The releases file is written first.
 	// If a changefile write fails after this, the release exists with fewer changes than it should
-	// (which is recoverable by re-releasing this version).
+	// (which is recoverable by re-running `release`).
 	if err := releases.WriteFile(opts.Fs, opts.releasesPath(), releaseFile); err != nil {
 		return err
 	}
