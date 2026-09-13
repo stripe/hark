@@ -7,6 +7,8 @@ import (
 
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/stripe/hark/changefile"
 )
 
 func TestWithDefaults(t *testing.T) {
@@ -23,10 +25,10 @@ func TestWithDefaults_KeepsProvidedValues(t *testing.T) {
 	var out bytes.Buffer
 
 	got := Options{
-		Fs:      fs,
-		Out:     &out,
-		Root:    "checkouts/stripe-go",
-		Workers: 3,
+		Fs:          fs,
+		Out:         &out,
+		Root:        "checkouts/stripe-go",
+		ReadOptions: changefile.ReadOptions{Workers: 3},
 	}.withDefaults()
 
 	assert.Same(t, fs, got.Fs)

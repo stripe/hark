@@ -37,7 +37,7 @@ type Changefile struct {
 	// the markdown content after the frontmatter.
 	Body string `yaml:"-"`
 
-	// the name of the file this struct originated from
+	// the full path that this struct originated from
 	SourcePath string `yaml:"-"`
 }
 
@@ -65,8 +65,12 @@ func Parse(content []byte) (*Changefile, error) {
 func (c *Changefile) Validate() []error {
 	var errs []error
 
-	if strings.TrimSpace(c.Title) == "" {
+	switch title := strings.TrimSpace(c.Title); {
+	case title == "":
 		errs = append(errs, errors.New("title is required"))
+	case strings.HasPrefix(strings.ToUpper(title), FixmeSlug):
+		errs = append(errs, fmt.Errorf(
+			"title still starts with %s; replace it with the changelog bullet you want readers to see", FixmeSlug))
 	}
 
 	if c.PRUrl != "" {
@@ -115,6 +119,7 @@ func (c *Changefile) WriteFile(fs afero.Fs, path string) error {
 	return nil
 }
 
+// Reads & parses a changefile from `path`. Doesn't enforce field constraints (use [Changefile.Validate] for that)
 func ReadFile(fs afero.Fs, path string) (*Changefile, error) {
 	data, err := afero.ReadFile(fs, path)
 	if err != nil {

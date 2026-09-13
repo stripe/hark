@@ -10,28 +10,47 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// affects how [ReadAll] walks and parses a directory tree.
+// controls how [ReadAll] and [ReadEvery] walk and parse a directory tree.
 type ReadOptions struct {
 	// caps how many files are parsed concurrently; defaults to the number of available CPUs
 	Workers int
 }
 
-// Recursively discover every changefile under `root` and parse them in parallel using a bounded worker pool. It fails on the first file that cannot be read or parsed.
-func ReadAll(ctx context.Context, fs afero.Fs, root string, opts ReadOptions) ([]*Changefile, error) {
-	workers := opts.Workers
-	if workers <= 0 {
-		workers = runtime.NumCPU()
+// NumWorkers resolves [ReadOptions.Workers] to a concrete count, so that everything
+// bounding a worker pool over changefiles agrees on what an unset value means.
+func (o ReadOptions) NumWorkers() int {
+	if o.Workers <= 0 {
+		return runtime.NumCPU()
 	}
+	return o.Workers
+}
 
-	paths, err := FindAll(fs, root)
+// ReadResult the output of every (attempted) operation in [ReadAll]. Exactly one of Changefile and Err is set.
+type ReadResult struct {
+	// the file this result is about; always set
+	Path string
+	// the parsed file, or `nil` when [ReadResult.Err] is set.
+	Changefile *Changefile
+	// why this file could not be read or parsed, or `nil`.
+	Err error
+}
+
+// ReadAll recursively discovers every changefile under `root` and parses them in
+// parallel using a bounded worker pool, in sorted path order. Non `.change.md` files are ignored.
+//
+// Returns a [ReadResult] for every changefile, regardless of if parsing was successful. It only errors if the recursion itself is unsuccessful.
+//
+// Callers that want to stop on the first failure should use [ReadEvery] instead.
+func ReadAll(ctx context.Context, fs afero.Fs, root string, opts ReadOptions) ([]ReadResult, error) {
+	paths, err := GetAllPaths(fs, root)
 	if err != nil {
 		return nil, err
 	}
 
-	results := make([]*Changefile, len(paths))
+	results := make([]ReadResult, len(paths))
 
 	g, gCtx := errgroup.WithContext(ctx)
-	g.SetLimit(workers)
+	g.SetLimit(opts.NumWorkers())
 
 	for i, p := range paths {
 		g.Go(func() error {
@@ -40,12 +59,8 @@ func ReadAll(ctx context.Context, fs afero.Fs, root string, opts ReadOptions) ([
 			}
 
 			cf, err := ReadFile(fs, p)
-			if err != nil {
-				return err
-			}
-
 			// each goroutine only writes to a specific index, so there's no contention
-			results[i] = cf
+			results[i] = ReadResult{Path: p, Changefile: cf, Err: err}
 			return nil
 		})
 	}
@@ -57,8 +72,26 @@ func ReadAll(ctx context.Context, fs afero.Fs, root string, opts ReadOptions) ([
 	return results, nil
 }
 
-// FindAll recursively lists the paths of every changefile under `root` in sorted order.
-func FindAll(fs afero.Fs, root string) ([]string, error) {
+// ReadEvery is [ReadAll] for callers who need every available changefile to be structurally valid. It fails on the first file that could not be read or parsed.
+func ReadEvery(ctx context.Context, fs afero.Fs, root string, opts ReadOptions) ([]*Changefile, error) {
+	results, err := ReadAll(ctx, fs, root, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	changefiles := make([]*Changefile, len(results))
+	for i, r := range results {
+		if r.Err != nil {
+			return nil, r.Err
+		}
+		changefiles[i] = r.Changefile
+	}
+
+	return changefiles, nil
+}
+
+// GetAllPaths recursively lists the paths of every changefile under `root` in sorted order.
+func GetAllPaths(fs afero.Fs, root string) ([]string, error) {
 	var paths []string
 
 	err := afero.Walk(fs, root, func(path string, info os.FileInfo, err error) error {

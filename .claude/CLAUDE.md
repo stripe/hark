@@ -17,18 +17,19 @@ just prepare       # format + lint + test
 
 ## Project Layout
 
-Packages outside `internal/` are the public API — other Go code imports them, so
-treat their names and signatures as a compatibility surface.
+`changefile/` and `releases/` are the public API — other Go code imports them, so treat
+their names and signatures as a compatibility surface. `cmd/` is not: the CLI is not
+meant to be embedded, and exports only `Execute`.
 
 - `main.go` — entrypoint, version injection via ldflags
 - `cmd/` — cobra commands (thin shells that parse args and delegate)
-- `changefile/` — **public**: changefile struct, frontmatter parsing, validation, serialization, recursive/parallel reading, filename generation (`Slugify`/`Name`/`ValidateName`), pull request repo (`PRRepo`)
-- `versions/` — **public**: versions JSON file read/write, release comparison (`Compare`), date-ordered `Insert`, and release channel (`Channel`, `File.Channel`) derived from version suffixes
+- `changefile/` — **public**: changefile struct, frontmatter parsing, validation, serialization, recursive/parallel reading, filename generation (`Name`/`ValidateName`)
+- `releases/` — **public**: `releases.json` read/write, release comparison (`Compare`), version validity (`IsVersionValid`), date-ordered `Insert`, semver-order `Predecessors`, duplicate detection (`FirstDuplicate`), and release channel (`Channel`) derived from version suffixes
 - `internal/changelog/` — high-level operations behind each CLI command (build, validate, release, new)
 
 ## Fixed layout
 
-The paths hark uses are hardcoded, not configurable: `.hark/versions.json`,
+The paths hark uses are hardcoded, not configurable: `.hark/releases.json`,
 `.hark/changes/*.change.md`, `.hark/intros/intro-<version>.md`, and `CHANGELOG.md`
 at the repo root. Only `Options.Root` moves them, and it has no CLI flag — it
 exists so a programmatic caller holding several checkouts can work through them one
@@ -48,9 +49,9 @@ change marked `is_stripe_api_change` sorts last whatever it is named.
 
 - Go version: whatever `go.mod` declares (CI reads `go-version-file: go.mod`)
 - Exported identifiers get doc comments; every package has a package comment
-- Avoid stutter in the public API (`versions.ReadFile`, not `versions.ReadVersionsFile`)
+- Avoid stutter in the public API (`releases.ReadFile`, not `releases.ReadVersionsFile`)
 - CLI commands only parse args and call into `internal/changelog`; no business logic in `cmd/`
-- Build the command tree with constructors (`NewRootCmd`) instead of package-level `var`s, so tests get independent trees and flag state can't leak
+- Build the command tree with a constructor instead of package-level `var`s, so tests get independent trees and flag state can't leak
 - Operations take an `Options` struct carrying their dependencies (`afero.Fs`, `io.Writer`, paths) — nothing reaches for globals, `os.Stdout`, or the real filesystem directly
 - Every function doing file I/O takes `afero.Fs` as a parameter for testability
 - Tests use `afero.NewMemMapFs()` — no temp files, no cleanup

@@ -39,12 +39,12 @@ const (
 )
 
 type Options struct {
+	changefile.ReadOptions
+
 	Fs   afero.Fs
 	Out  io.Writer
 	Now  func() time.Time
 	Root string
-	// used to cap the changefile parsing concurrency. `0` means one worker for each CPU.
-	Workers int
 }
 
 func (o Options) withDefaults() Options {
