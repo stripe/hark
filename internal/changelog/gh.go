@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/stripe/hark/changefile"
 )
 
 // data about a GH pull request used in the creation of a changefile
@@ -23,8 +25,8 @@ type PullRequestFinder interface {
 	CurrentPR(ctx context.Context) (*PullRequest, error)
 }
 
-// "DEVSDK-123" or "RUN_DEVSDK-456".
-var jiraTagRegex = regexp.MustCompile(`\b[A-Z][A-Z_0-9]+-\d+\b`)
+// A ticket reference in a larger block of text
+var jiraTagRegex = regexp.MustCompile(`\b` + changefile.JiraTagPattern + `\b`)
 
 type ghFinder struct{}
 

@@ -157,6 +157,28 @@ func TestValidate(t *testing.T) {
 			wantErrs:   1,
 		},
 		{
+			name: "valid jira_tickets_closed",
+			changefile: Changefile{Title: "A title", JiraTicketsClosed: []string{
+				"DEVSDK-123",
+				// RUN_DEVSDK is its own board, so the underscore is part of the key.
+				"RUN_DEVSDK-456",
+			}},
+			wantErrs: 0,
+		},
+		{
+			name: "invalid jira_tickets_closed",
+			changefile: Changefile{Title: "A title", JiraTicketsClosed: []string{
+				"devsdk-1",            // a board is upper case
+				"DEVSDK",              // no number
+				"RUN_DEVSDK",          // no number
+				"123",                 // no board
+				"DEVSDK-123 and more", // a reference, not prose containing one
+				"#DEVSDK-123",         // no decoration
+				"DEVSDK--123",         // double dash
+			}},
+			wantErrs: 7,
+		},
+		{
 			// Every bad entry is reported, not just the first.
 			name: "several invalid github_issues_resolved",
 			changefile: Changefile{Title: "A title", GithubIssuesResolved: []string{

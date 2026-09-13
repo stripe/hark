@@ -256,13 +256,21 @@ const generatedNotice = "<!--\n" +
 
 var sdkLanguages = []string{"java", "python", "ruby", "php", "go", "node", "dotnet"}
 
+func sdkRepo(language string) string {
+	if !slices.Contains(sdkLanguages, language) {
+		return ""
+	}
+	return "stripe/stripe-" + language
+}
+
 // changelogRef names another branch's changelog: a link when the repository could be
 // worked out, and plain prose when it could not.
 func changelogRef(label, language string) string {
-	if language == "" {
+	repo := sdkRepo(language)
+	if repo == "" {
 		return label
 	}
-	return fmt.Sprintf("[%s](https://github.com/stripe/stripe-%s/blob/master/CHANGELOG.md)", label, language)
+	return fmt.Sprintf("[%s](https://github.com/%s/blob/master/CHANGELOG.md)", label, repo)
 }
 
 // a standing note a prerelease channel's changelog opens with pointing readers to the GA changelog.

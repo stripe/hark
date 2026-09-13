@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/goccy/go-yaml"
@@ -13,6 +14,16 @@ import (
 
 // every valid changefile filename ends with this extension.
 const Extension = ".change.md"
+
+// JiraTagPattern is the shape of a Jira ticket reference, like "DEVSDK-123" or "RUN_DEVSDK-456".
+//
+// A pattern rather than a compiled regexp, because the two uses want different anchors:
+// validating a stored value wants the whole string, while pulling references out of a
+// branch name wants word boundaries. Sharing the shape is what keeps `hark new` from
+// writing a tag `hark validate` would then reject.
+const JiraTagPattern = `[A-Z][A-Z_0-9]+-[0-9]+`
+
+var jiraTagRegex = regexp.MustCompile(`^` + JiraTagPattern + `$`)
 
 // Changefile is the in-memory representation of a single parsed changefile: its frontmatter fields plus the
 // markdown body that follows them.
@@ -76,6 +87,13 @@ func (c *Changefile) Validate() []error {
 	if c.PRUrl != "" {
 		if _, err := url.ParseRequestURI(c.PRUrl); err != nil {
 			errs = append(errs, fmt.Errorf("pr_url is not a valid URL: %w", err))
+		}
+	}
+
+	for i, tag := range c.JiraTicketsClosed {
+		if !jiraTagRegex.MatchString(tag) {
+			errs = append(errs, fmt.Errorf(
+				"jira_tickets_closed[%d] %q is not a valid ticket reference, like DEVSDK-123", i, tag))
 		}
 	}
 

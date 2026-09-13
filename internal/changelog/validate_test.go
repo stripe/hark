@@ -91,6 +91,88 @@ func TestValidate_AllowsFixmeLaterInATitle(t *testing.T) {
 	assert.NotContains(t, out, "FIXME")
 }
 
+// A changefile's metadata describes its own pull request, so a link to another repo is
+// either a typo or a file copied from a sibling SDK. This is what `check-github-links`
+// used to do with awk over the pull request's diff.
+func TestValidate_RejectsALinkToAnotherRepo(t *testing.T) {
+	fs := buildFixture(t, `{`+gaMetadata+`"releases":[{"version":"1.0.0","released_on":"2026-01-15"}]}`,
+		map[string]string{
+			"2026-01-14_xavdid_add-widgets.change.md": "---\ntitle: \"Add widgets\"\n" +
+				"pr_url: \"https://github.com/stripe/stripe-python/pull/42\"\n---\n",
+		})
+
+	out, err := validate(t, fs)
+	require.Error(t, err)
+	assert.Contains(t, out, "pr_url names stripe/stripe-python, but this repo is stripe/stripe-go")
+}
+
+// Issue links are held to the same rule, and are reported by index so the line is
+// findable.
+func TestValidate_RejectsAnIssueLinkToAnotherRepo(t *testing.T) {
+	fs := buildFixture(t, `{`+gaMetadata+`"releases":[{"version":"1.0.0","released_on":"2026-01-15"}]}`,
+		map[string]string{
+			"2026-01-14_xavdid_add-widgets.change.md": "---\ntitle: \"Add widgets\"\n" +
+				"github_issues_resolved:\n" +
+				"  - \"https://github.com/stripe/stripe-go/issues/1\"\n" +
+				"  - \"https://github.com/stripe/stripe-ruby/issues/2\"\n---\n",
+		})
+
+	out, err := validate(t, fs)
+	require.Error(t, err)
+	assert.Contains(t, out, "github_issues_resolved[1] names stripe/stripe-ruby")
+	assert.NotContains(t, out, "github_issues_resolved[0]", "the first one is fine")
+}
+
+// The old action skipped anything that was not a GitHub URL, deferring to validate --
+// which did not actually check. Now it does.
+func TestValidate_RejectsALinkThatIsNotAGithubRepo(t *testing.T) {
+	for _, link := range []string{
+		"https://gitlab.com/stripe/stripe-go/pull/1",
+		"https://github.com/stripe",
+		"https://example.com/whatever",
+	} {
+		t.Run(link, func(t *testing.T) {
+			fs := buildFixture(t, `{`+gaMetadata+`"releases":[{"version":"1.0.0","released_on":"2026-01-15"}]}`,
+				map[string]string{
+					"2026-01-14_xavdid_add-widgets.change.md": "---\ntitle: \"Add widgets\"\n" +
+						"pr_url: \"" + link + "\"\n---\n",
+				})
+
+			out, err := validate(t, fs)
+			require.Error(t, err)
+			assert.Contains(t, out, "pr_url is not a github.com URL naming a repository")
+		})
+	}
+}
+
+// A link to this repo is the ordinary case and says nothing.
+func TestValidate_AcceptsALinkToThisRepo(t *testing.T) {
+	fs := buildFixture(t, `{`+gaMetadata+`"releases":[{"version":"1.0.0","released_on":"2026-01-15"}]}`,
+		map[string]string{
+			"2026-01-14_xavdid_add-widgets.change.md": "---\ntitle: \"Add widgets\"\n" +
+				"pr_url: \"https://github.com/stripe/stripe-go/pull/42\"\n" +
+				"github_issues_resolved:\n  - \"https://github.com/stripe/stripe-go/issues/7\"\n---\n",
+		})
+
+	_, err := validate(t, fs)
+	require.NoError(t, err)
+}
+
+// A malformed URL is reported once, by the field's own validation, rather than also as
+// "not a github.com URL".
+func TestValidate_ReportsAMalformedLinkOnlyOnce(t *testing.T) {
+	fs := buildFixture(t, `{`+gaMetadata+`"releases":[{"version":"1.0.0","released_on":"2026-01-15"}]}`,
+		map[string]string{
+			"2026-01-14_xavdid_add-widgets.change.md": "---\ntitle: \"Add widgets\"\n" +
+				"pr_url: \"not-a-url\"\n---\n",
+		})
+
+	out, err := validate(t, fs)
+	require.Error(t, err)
+	assert.Contains(t, out, "pr_url is not a valid URL")
+	assert.NotContains(t, out, "not a github.com URL")
+}
+
 // The point of validate is that one run tells you everything to fix, so every
 // problem in a file is reported, not just the first.
 func TestValidate_ReportsEveryProblemInAFile(t *testing.T) {

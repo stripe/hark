@@ -6,7 +6,7 @@ description: "Run all the changelog-specific validation a PR might need"
 # The calling job has to provide:
 #
 #   permissions:
-#     contents: read       # for the checkout the last three steps read changefiles from
+#     contents: read       # for the checkout the last two steps read changefiles from
 #     pull-requests: read  # to ask which files the pull request touches
 #   steps:
 #     - uses: actions/checkout@...
@@ -27,5 +27,4 @@ runs:
     # Ordered cheapest to most expensive
     - uses: $/actions/require-changefile
     - uses: $/actions/require-migration-guide
-    - uses: $/actions/check-github-links
     - uses: $/actions/validate-changefiles

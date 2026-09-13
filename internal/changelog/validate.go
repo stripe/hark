@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -243,5 +244,66 @@ func validateChangefile(result changefile.ReadResult, releasesFile *releases.Fil
 			cf.ReleasedInVersion, releasesFile.SourcePath))
 	}
 
+	errs = append(errs, checkLinks(cf, releasesFile)...)
+
 	return fileReport{Path: result.Path, Errors: errs}
+}
+
+// a link-valued frontmatter field, named the way the frontmatter names it so an error
+// points at the line to fix.
+type link struct {
+	field string
+	url   string
+}
+
+func changefileLinks(cf *changefile.Changefile) []link {
+	var links []link
+	if cf.PRUrl != "" {
+		links = append(links, link{"pr_url", cf.PRUrl})
+	}
+	for i, issue := range cf.GithubIssuesResolved {
+		links = append(links, link{fmt.Sprintf("github_issues_resolved[%d]", i), issue})
+	}
+	return links
+}
+
+// reports metadata that names a GitHub pr/issue outside this repo.
+func checkLinks(cf *changefile.Changefile, releasesFile *releases.File) []error {
+	if releasesFile == nil {
+		return nil
+	}
+	repo := sdkRepo(releasesFile.Metadata.Language)
+	if repo == "" {
+		return nil
+	}
+
+	var errs []error
+	for _, l := range changefileLinks(cf) {
+		u, err := url.ParseRequestURI(l.url)
+		if err != nil {
+			continue // not a URL at all, which is enforced elsewhere. ignore here
+		}
+
+		cited, ok := githubRepo(u)
+		switch {
+		case !ok:
+			errs = append(errs, fmt.Errorf("%s is not a github.com URL naming a repository", l.field))
+		case cited != repo:
+			errs = append(errs, fmt.Errorf("%s names %s, but this repo is %s", l.field, cited, repo))
+		}
+	}
+	return errs
+}
+
+// githubRepo is the "owner/name" a GitHub URL points at.
+func githubRepo(u *url.URL) (string, bool) {
+	if u.Host != "github.com" {
+		return "", false
+	}
+
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+		return "", false
+	}
+	return parts[0] + "/" + parts[1], true
 }
