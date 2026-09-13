@@ -2,11 +2,16 @@ set quiet
 
 export PATH := home_directory() + "/go/bin:" + env('PATH')
 
+golangci_lint_version := "v2.11.4"
+
+# shared by the justfile and the CI installer
+zizmor_version := "1.29.0"
+
 _default:
     just --list --unsorted
 
-# run format, lint, and tests to prepare for CI
-prepare: format lint test
+# run every check CI runs, so a green run here means a green run there
+prepare: test format lint zizmor
 
 # run all unit tests
 test *args="./...":
@@ -27,6 +32,10 @@ lint-fix:
     go fix ./...
     go vet -fix ./...
 
+# audit the workflows and composite actions for security problems
+zizmor:
+    uvx zizmor@{{ zizmor_version }} --min-severity high .
+
 # format all Go files
 format:
     gofmt -s -w .
@@ -37,7 +46,7 @@ format-check:
 
 # install development tools
 install:
-    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{ golangci_lint_version }}
 
 dev *args:
     go run main.go {{ args }}

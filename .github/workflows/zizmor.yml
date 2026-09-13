@@ -13,6 +13,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+      # Read the zizmor version from the justfile the versions stay in sync
+      - id: version
+        run: echo "zizmor_version=$(just --evaluate zizmor_version)" >>"$GITHUB_OUTPUT"
       - uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
         with:
           # this controls whether zizmor plugs into GH's "advanced security" reporting
@@ -27,4 +31,4 @@ jobs:
           # The action defaults to downloading the latest zizmor. Pinning the action's commit does not pin
           # the binary it downloads, and an unpinned binary can change what CI
           # enforces with no review on our side.
-          version: 1.29.0
+          version: ${{ steps.version.outputs.zizmor_version }}
