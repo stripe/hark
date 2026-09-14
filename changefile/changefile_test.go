@@ -20,7 +20,7 @@ func TestParse(t *testing.T) {
 			input: `---
 title: "Added a new method to stripeClient"
 pr_url: "https://github.com/stripe/stripe-go/pulls/123"
-is_breaking: true
+semver_level: major
 is_stripe_api_change: false
 jira_tickets_closed:
   - DEVSDK-123
@@ -38,7 +38,7 @@ released_in_version: "1.2.3"
 			want: &Changefile{
 				Title:             "Added a new method to stripeClient",
 				PRUrl:             "https://github.com/stripe/stripe-go/pulls/123",
-				IsBreaking:        true,
+				SemverLevel:       SemverLevelMajor,
 				IsStripeAPIChange: true,
 				JiraTicketsClosed: []string{"DEVSDK-123", "DEVSDK-456"},
 				GithubIssuesResolved: []string{
@@ -109,7 +109,7 @@ This is some prose explaining the change in detail.
 			require.NoError(t, err)
 			assert.Equal(t, tt.want.Title, got.Title)
 			assert.Equal(t, tt.want.PRUrl, got.PRUrl)
-			assert.Equal(t, tt.want.IsBreaking, got.IsBreaking)
+			assert.Equal(t, tt.want.SemverLevel, got.SemverLevel)
 			assert.Equal(t, tt.want.JiraTicketsClosed, got.JiraTicketsClosed)
 			assert.Equal(t, tt.want.GithubIssuesResolved, got.GithubIssuesResolved)
 			assert.Equal(t, tt.want.Section, got.Section)
@@ -219,18 +219,6 @@ func TestValidate(t *testing.T) {
 			changefile: Changefile{Title: "A title", SemverLevel: "Major"},
 			wantErrs:   1,
 		},
-		{
-			// TODO(semver-level): remove with is_breaking.
-			name:       "is_breaking agreeing with semver_level",
-			changefile: Changefile{Title: "A title", IsBreaking: true, SemverLevel: SemverLevelMajor},
-			wantErrs:   0,
-		},
-		{
-			// TODO(semver-level): remove with is_breaking.
-			name:       "is_breaking contradicting semver_level",
-			changefile: Changefile{Title: "A title", IsBreaking: true, SemverLevel: SemverLevelPatch},
-			wantErrs:   1,
-		},
 	}
 
 	for _, tt := range tests {
@@ -241,8 +229,7 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-// A changefile that says nothing about its level is a patch, and is_breaking still reads
-// as major until it is gone.
+// A changefile that says nothing about its level is a patch.
 func TestLevel(t *testing.T) {
 	for _, tt := range []struct {
 		name string
@@ -253,9 +240,6 @@ func TestLevel(t *testing.T) {
 		{"explicit patch", Changefile{SemverLevel: SemverLevelPatch}, SemverLevelPatch},
 		{"minor", Changefile{SemverLevel: SemverLevelMinor}, SemverLevelMinor},
 		{"major", Changefile{SemverLevel: SemverLevelMajor}, SemverLevelMajor},
-		// TODO(semver-level): remove these two with is_breaking.
-		{"is_breaking alone", Changefile{IsBreaking: true}, SemverLevelMajor},
-		{"semver_level wins", Changefile{IsBreaking: true, SemverLevel: SemverLevelMajor}, SemverLevelMajor},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, tt.cf.Level())
@@ -271,7 +255,6 @@ func TestSemverLevelRoundtrip(t *testing.T) {
 	serialized, err := original.Serialize()
 	require.NoError(t, err)
 	assert.Contains(t, string(serialized), "semver_level: major\n")
-	assert.NotContains(t, string(serialized), "is_breaking")
 
 	parsed, err := Parse(serialized)
 	require.NoError(t, err)
@@ -283,7 +266,7 @@ func TestSerializeRoundtrip(t *testing.T) {
 	original := &Changefile{
 		Title:                "Test change",
 		PRUrl:                "https://github.com/stripe/stripe-go/pulls/1",
-		IsBreaking:           true,
+		SemverLevel:          SemverLevelMajor,
 		JiraTicketsClosed:    []string{"DEVSDK-100"},
 		GithubIssuesResolved: []string{"https://github.com/stripe/stripe-go/issues/7"},
 		Section:              "features",
@@ -298,7 +281,7 @@ func TestSerializeRoundtrip(t *testing.T) {
 
 	assert.Equal(t, original.Title, parsed.Title)
 	assert.Equal(t, original.PRUrl, parsed.PRUrl)
-	assert.Equal(t, original.IsBreaking, parsed.IsBreaking)
+	assert.Equal(t, original.SemverLevel, parsed.SemverLevel)
 	assert.Equal(t, original.JiraTicketsClosed, parsed.JiraTicketsClosed)
 	assert.Equal(t, original.GithubIssuesResolved, parsed.GithubIssuesResolved)
 	assert.Equal(t, original.Section, parsed.Section)

@@ -29,8 +29,8 @@ func TestSplitFrontmatter(t *testing.T) {
 		},
 		{
 			name:     "multiline frontmatter",
-			input:    "---\ntitle: hello\nis_breaking: true\n---\nbody\n",
-			wantYAML: "title: hello\nis_breaking: true\n",
+			input:    "---\ntitle: hello\nsemver_level: major\n---\nbody\n",
+			wantYAML: "title: hello\nsemver_level: major\n",
 			wantBody: "body\n",
 		},
 		{

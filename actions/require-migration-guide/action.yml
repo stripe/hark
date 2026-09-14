@@ -36,7 +36,7 @@ runs:
             | .filename' "$FILES" |
           grep -E '^\.hark/migration-guides/.+' || true)
 
-        # Only care if we find an explicit `is_breaking: true`
+        # Only care if we find an explicit `semver_level: major`
         breaking=""
         while IFS= read -r path; do
           [ -n "$path" ] || continue
@@ -48,11 +48,12 @@ runs:
                 { sub(/\r$/, "") }
                 NR == 1 { if ($0 != "---") exit 1; infm = 1; next }
                 infm && $0 == "---" { infm = 0; next }
-                infm && /^is_breaking:/ {
+                infm && /^semver_level:/ {
                   v = $0
-                  sub(/^is_breaking:[ \t]*/, "", v)
+                  sub(/^semver_level:[ \t]*/, "", v)
                   sub(/[ \t]*$/, "", v)
-                  if (v != "false" && v != "False" && v != "FALSE" && v != "") found = 1
+                  gsub(/^["'\'']|["'\'']$/, "", v)
+                  if (v == "major") found = 1
                 }
                 END { exit found ? 0 : 1 }
               ' "$path"; then

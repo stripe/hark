@@ -324,7 +324,7 @@ func TestRenderChange(t *testing.T) {
 	assert.Equal(t, "* Add widgets\n", renderOneChange(t, aChange("a.change.md", "  Add widgets  ")))
 
 	assert.Equal(t, "* ⚠️ Remove widgets\n", renderOneChange(t, &changefile.Changefile{
-		Title: "Remove widgets", IsBreaking: true,
+		Title: "Remove widgets", SemverLevel: changefile.SemverLevelMajor,
 	}))
 
 	assert.Equal(t, "* [#12](https://github.com/stripe/stripe-go/pull/12) Add widgets\n",
@@ -346,10 +346,10 @@ func TestRenderChange(t *testing.T) {
 	// Everything at once, in order: marker, link, title, body.
 	assert.Equal(t, "* ⚠️ [#12](https://github.com/stripe/stripe-go/pull/12) Remove widgets\n  Some detail.\n",
 		renderOneChange(t, &changefile.Changefile{
-			Title:      "Remove widgets",
-			PRUrl:      "https://github.com/stripe/stripe-go/pull/12",
-			IsBreaking: true,
-			Body:       "Some detail.\n",
+			Title:       "Remove widgets",
+			PRUrl:       "https://github.com/stripe/stripe-go/pull/12",
+			SemverLevel: changefile.SemverLevelMajor,
+			Body:        "Some detail.\n",
 		}))
 }
 

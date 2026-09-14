@@ -46,6 +46,10 @@ must lead with the date: the changelog orders changes within a release by filena
 oldest first — except that a change marked `is_stripe_api_change` sorts last whatever
 it is named. Release dates in `releases.json` use that same format.
 
+How big a change is lives in one field, `semver_level`. A changefile that leaves it
+off is a patch, so read it through `Changefile.Level()` rather than the field: `major`
+is what earns the ⚠️ in the changelog and what the migration-guide check looks for.
+
 ## Conventions
 
 - Go version: whatever `go.mod` declares (CI reads `go-version-file: go.mod`)

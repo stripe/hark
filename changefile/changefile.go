@@ -44,10 +44,6 @@ type Changefile struct {
 	PRUrl string `yaml:"pr_url,omitempty"`
 	// optional compatibility level for the change. missing is considered `patch`
 	SemverLevel string `yaml:"semver_level,omitempty"`
-	// marks the change requiring a semver-major bump to release.
-	//
-	// TODO(semver-level): remove once every changefile records semver_level instead.
-	IsBreaking bool `yaml:"is_breaking,omitempty"`
 	// set on changes caused by and updated spec. Won't be shown on docs.stripe.com and will be listed last in generated changelogs.
 	IsStripeAPIChange bool `yaml:"is_stripe_api_change,omitempty"`
 	// a list of jira tags (like `DEVSDK-123`) that can be closed when this change is released.
@@ -86,15 +82,10 @@ func Parse(content []byte) (*Changefile, error) {
 
 // the version bump this change calls for. handles computing the default for missing fields
 func (c *Changefile) Level() string {
-	switch {
-	case c.SemverLevel != "":
-		return c.SemverLevel
-	// TODO(semver-level): remove with the field itself.
-	case c.IsBreaking:
-		return SemverLevelMajor
-	default:
+	if c.SemverLevel == "" {
 		return SemverLevelPatch
 	}
+	return c.SemverLevel
 }
 
 // Validate checks required fields and format constraints.
@@ -121,12 +112,6 @@ func (c *Changefile) Validate() []error {
 	if c.SemverLevel != "" && !slices.Contains(SemverLevels, c.SemverLevel) {
 		errs = append(errs, fmt.Errorf("semver_level %q is not one of: %s",
 			c.SemverLevel, strings.Join(SemverLevels, ", ")))
-	}
-
-	// TODO(semver-level): remove with the field itself.
-	if c.IsBreaking && c.SemverLevel != "" && c.SemverLevel != SemverLevelMajor {
-		errs = append(errs, fmt.Errorf("is_breaking is set but semver_level is %q; a breaking change is %s",
-			c.SemverLevel, SemverLevelMajor))
 	}
 
 	for i, tag := range c.JiraTicketsClosed {

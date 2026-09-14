@@ -53,8 +53,6 @@ func newNewCmd(g *globalFlags) *cobra.Command {
 	f.StringVar(&draft.Section, "section", "", "heading to group this change under")
 	f.StringVar(&draft.SemverLevel, "semver-level", "",
 		"size of the version bump this change calls for: "+strings.Join(changefile.SemverLevels, ", ")+" (defaults to patch)")
-	// TODO(semver-level): remove in favour of --semver-level major.
-	f.BoolVar(&draft.IsBreaking, "breaking", false, "mark the change as breaking")
 	f.BoolVar(&draft.IsStripeAPIChange, "stripe-api-change", false, "mark the change as the result of an API spec bump")
 	f.StringArrayVar(&draft.JiraTicketsClosed, "jira-tag", nil, "Jira ticket reference (like DEVSDK-123); repeat for more than one")
 	f.StringArrayVar(&draft.GithubIssuesResolved, "github-issue-resolved", nil, "URL of a GitHub issue this change resolves once released; repeat for more than one")

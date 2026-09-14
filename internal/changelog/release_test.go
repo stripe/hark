@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stripe/hark/changefile"
 	"github.com/stripe/hark/releases"
 )
 
@@ -396,7 +397,7 @@ func TestRelease_PreservesChangefileContents(t *testing.T) {
 		"2026-09-08_xavdid_add-widgets.change.md": "---\n" +
 			"title: Add support for widgets\n" +
 			"pr_url: https://github.com/stripe/stripe-go/pull/123\n" +
-			"is_breaking: true\n" +
+			"semver_level: major\n" +
 			"is_stripe_api_change: true\n" +
 			"jira_tickets_closed:\n  - DEVSDK-456\n" +
 			"section: ⚠️ Removed\n" +
@@ -408,7 +409,7 @@ func TestRelease_PreservesChangefileContents(t *testing.T) {
 	cf := read(t, fs, changesFixtureDir+"/2026-09-08_xavdid_add-widgets.change.md")
 	assert.Equal(t, "Add support for widgets", cf.Title)
 	assert.Equal(t, "https://github.com/stripe/stripe-go/pull/123", cf.PRUrl)
-	assert.True(t, cf.IsBreaking)
+	assert.Equal(t, changefile.SemverLevelMajor, cf.SemverLevel)
 	assert.True(t, cf.IsStripeAPIChange)
 	assert.Equal(t, []string{"DEVSDK-456"}, cf.JiraTicketsClosed)
 	assert.Equal(t, "⚠️ Removed", cf.Section)

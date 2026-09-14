@@ -174,7 +174,7 @@ func TestNew(t *testing.T) {
 
 	out, err := runFs(t, fs, "new", "add-widgets",
 		"--title", "Add support for widgets", "--pr-url", "https://github.com/stripe/stripe-go/pull/1",
-		"--section", "Added", "--breaking", "--jira-tag", "DEVSDK-1", "--jira-tag", "DEVSDK-2")
+		"--section", "Added", "--semver-level", "major", "--jira-tag", "DEVSDK-1", "--jira-tag", "DEVSDK-2")
 	require.NoError(t, err)
 	assert.Contains(t, out, "add-widgets.change.md")
 
@@ -184,7 +184,7 @@ func TestNew(t *testing.T) {
 
 	written, err := afero.ReadFile(fs, paths[0])
 	require.NoError(t, err)
-	for _, want := range []string{"Add support for widgets", "Added", "is_breaking: true", "DEVSDK-1", "DEVSDK-2"} {
+	for _, want := range []string{"Add support for widgets", "Added", "semver_level: major", "DEVSDK-1", "DEVSDK-2"} {
 		assert.Contains(t, string(written), want)
 	}
 }

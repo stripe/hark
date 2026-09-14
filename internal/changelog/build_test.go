@@ -70,7 +70,7 @@ func TestBuild_Golden(t *testing.T) {
 		"2024-02-27-bob-drop-gizmos.change.md": "---\n" +
 			"title: \"Remove the gizmo resource\"\n" +
 			"pr_url: \"https://github.com/stripe/stripe-go/pull/41\"\n" +
-			"is_breaking: true\n" +
+			"semver_level: major\n" +
 			"section: \"⚠️ Removed\"\n" +
 			"released_in_version: \"2.0.0\"\n---\n",
 		"2024-01-14-carol-first.change.md": "---\n" +
@@ -133,21 +133,20 @@ func TestBuild_RendersVersionsWithNoChanges(t *testing.T) {
 	assert.Contains(t, got, "## <a id=\"1-1-0\"></a>1.1.0 - 2024-02-01\n\n## <a id=\"1-0-0\"></a>1.0.0 - 2024-01-15\n")
 }
 
-// The warning marker follows the level a change calls for, so a migrated changefile that
-// records semver_level rather than is_breaking still reads as breaking.
+// The warning marker follows the level a change calls for: major is the breaking one.
 func TestBuild_MajorChangesAreMarked(t *testing.T) {
 	fs := buildFixture(t, `{"releases":[{"version":"1.0.0","released_on":"2024-01-15"}]}`,
 		map[string]string{
 			"a.change.md": "---\ntitle: \"Remove the Orders resource\"\nsemver_level: major\nreleased_in_version: \"1.0.0\"\n---\n",
 			"b.change.md": "---\ntitle: \"Add widgets\"\nsemver_level: minor\nreleased_in_version: \"1.0.0\"\n---\n",
-			// TODO(semver-level): remove with is_breaking.
-			"c.change.md": "---\ntitle: \"Remove the Charges resource\"\nis_breaking: true\nreleased_in_version: \"1.0.0\"\n---\n",
+			"c.change.md": "---\ntitle: \"Fix retries\"\nreleased_in_version: \"1.0.0\"\n---\n",
 		})
 
 	got := build(t, fs)
 	assert.Contains(t, got, "* ⚠️ Remove the Orders resource\n")
 	assert.Contains(t, got, "* Add widgets\n")
-	assert.Contains(t, got, "* ⚠️ Remove the Charges resource\n")
+	// nothing said, so a patch
+	assert.Contains(t, got, "* Fix retries\n")
 }
 
 // An entry recorded before it ships has no date to put in its heading, and still gets
