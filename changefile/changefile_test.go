@@ -198,6 +198,39 @@ func TestValidate(t *testing.T) {
 			}},
 			wantErrs: 2,
 		},
+		{
+			name:       "every semver_level",
+			changefile: Changefile{Title: "A title", SemverLevel: SemverLevelMinor},
+			wantErrs:   0,
+		},
+		{
+			// The field is optional, since a changefile without one is a patch.
+			name:       "no semver_level",
+			changefile: Changefile{Title: "A title"},
+			wantErrs:   0,
+		},
+		{
+			name:       "unreadable semver_level",
+			changefile: Changefile{Title: "A title", SemverLevel: "breaking"},
+			wantErrs:   1,
+		},
+		{
+			name:       "semver_level of the wrong case",
+			changefile: Changefile{Title: "A title", SemverLevel: "Major"},
+			wantErrs:   1,
+		},
+		{
+			// TODO(semver-level): remove with is_breaking.
+			name:       "is_breaking agreeing with semver_level",
+			changefile: Changefile{Title: "A title", IsBreaking: true, SemverLevel: SemverLevelMajor},
+			wantErrs:   0,
+		},
+		{
+			// TODO(semver-level): remove with is_breaking.
+			name:       "is_breaking contradicting semver_level",
+			changefile: Changefile{Title: "A title", IsBreaking: true, SemverLevel: SemverLevelPatch},
+			wantErrs:   1,
+		},
 	}
 
 	for _, tt := range tests {
@@ -206,6 +239,44 @@ func TestValidate(t *testing.T) {
 			assert.Len(t, errs, tt.wantErrs)
 		})
 	}
+}
+
+// A changefile that says nothing about its level is a patch, and is_breaking still reads
+// as major until it is gone.
+func TestLevel(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		cf   Changefile
+		want string
+	}{
+		{"nothing said", Changefile{}, SemverLevelPatch},
+		{"explicit patch", Changefile{SemverLevel: SemverLevelPatch}, SemverLevelPatch},
+		{"minor", Changefile{SemverLevel: SemverLevelMinor}, SemverLevelMinor},
+		{"major", Changefile{SemverLevel: SemverLevelMajor}, SemverLevelMajor},
+		// TODO(semver-level): remove these two with is_breaking.
+		{"is_breaking alone", Changefile{IsBreaking: true}, SemverLevelMajor},
+		{"semver_level wins", Changefile{IsBreaking: true, SemverLevel: SemverLevelMajor}, SemverLevelMajor},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.cf.Level())
+		})
+	}
+}
+
+// The level survives a write and a read, so the migration's output is what the next run
+// reads back.
+func TestSemverLevelRoundtrip(t *testing.T) {
+	original := &Changefile{Title: "Test change", SemverLevel: SemverLevelMajor}
+
+	serialized, err := original.Serialize()
+	require.NoError(t, err)
+	assert.Contains(t, string(serialized), "semver_level: major\n")
+	assert.NotContains(t, string(serialized), "is_breaking")
+
+	parsed, err := Parse(serialized)
+	require.NoError(t, err)
+	assert.Equal(t, SemverLevelMajor, parsed.SemverLevel)
+	assert.Equal(t, SemverLevelMajor, parsed.Level())
 }
 
 func TestSerializeRoundtrip(t *testing.T) {

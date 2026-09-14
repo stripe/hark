@@ -133,6 +133,23 @@ func TestBuild_RendersVersionsWithNoChanges(t *testing.T) {
 	assert.Contains(t, got, "## <a id=\"1-1-0\"></a>1.1.0 - 2024-02-01\n\n## <a id=\"1-0-0\"></a>1.0.0 - 2024-01-15\n")
 }
 
+// The warning marker follows the level a change calls for, so a migrated changefile that
+// records semver_level rather than is_breaking still reads as breaking.
+func TestBuild_MajorChangesAreMarked(t *testing.T) {
+	fs := buildFixture(t, `{"releases":[{"version":"1.0.0","released_on":"2024-01-15"}]}`,
+		map[string]string{
+			"a.change.md": "---\ntitle: \"Remove the Orders resource\"\nsemver_level: major\nreleased_in_version: \"1.0.0\"\n---\n",
+			"b.change.md": "---\ntitle: \"Add widgets\"\nsemver_level: minor\nreleased_in_version: \"1.0.0\"\n---\n",
+			// TODO(semver-level): remove with is_breaking.
+			"c.change.md": "---\ntitle: \"Remove the Charges resource\"\nis_breaking: true\nreleased_in_version: \"1.0.0\"\n---\n",
+		})
+
+	got := build(t, fs)
+	assert.Contains(t, got, "* ⚠️ Remove the Orders resource\n")
+	assert.Contains(t, got, "* Add widgets\n")
+	assert.Contains(t, got, "* ⚠️ Remove the Charges resource\n")
+}
+
 // An entry recorded before it ships has no date to put in its heading, and still gets
 // the anchor that links to it.
 func TestBuild_ReleaseWithNoDateHeadsWithJustItsVersion(t *testing.T) {

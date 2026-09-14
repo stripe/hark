@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/goccy/go-yaml"
@@ -25,6 +26,15 @@ const JiraTagPattern = `[A-Z][A-Z_0-9]+-[0-9]+`
 
 var jiraTagRegex = regexp.MustCompile(`^` + JiraTagPattern + `$`)
 
+// The size of the version bump a change calls for when it ships.
+const (
+	SemverLevelMajor = "major"
+	SemverLevelMinor = "minor"
+	SemverLevelPatch = "patch"
+)
+
+var SemverLevels = []string{SemverLevelMajor, SemverLevelMinor, SemverLevelPatch}
+
 // Changefile is the in-memory representation of a single parsed changefile: its frontmatter fields plus the
 // markdown body that follows them.
 type Changefile struct {
@@ -32,7 +42,11 @@ type Changefile struct {
 	Title string `yaml:"title"`
 	// the original pull request a change was part of.
 	PRUrl string `yaml:"pr_url,omitempty"`
+	// optional compatibility level for the change. missing is considered `patch`
+	SemverLevel string `yaml:"semver_level,omitempty"`
 	// marks the change requiring a semver-major bump to release.
+	//
+	// TODO(semver-level): remove once every changefile records semver_level instead.
 	IsBreaking bool `yaml:"is_breaking,omitempty"`
 	// set on changes caused by and updated spec. Won't be shown on docs.stripe.com and will be listed last in generated changelogs.
 	IsStripeAPIChange bool `yaml:"is_stripe_api_change,omitempty"`
@@ -70,6 +84,19 @@ func Parse(content []byte) (*Changefile, error) {
 	return &cf, nil
 }
 
+// the version bump this change calls for. handles computing the default for missing fields
+func (c *Changefile) Level() string {
+	switch {
+	case c.SemverLevel != "":
+		return c.SemverLevel
+	// TODO(semver-level): remove with the field itself.
+	case c.IsBreaking:
+		return SemverLevelMajor
+	default:
+		return SemverLevelPatch
+	}
+}
+
 // Validate checks required fields and format constraints.
 // It reports every problem it finds rather than stopping at the first.
 // An empty slice means the changefile is valid.
@@ -88,6 +115,18 @@ func (c *Changefile) Validate() []error {
 		if _, err := url.ParseRequestURI(c.PRUrl); err != nil {
 			errs = append(errs, fmt.Errorf("pr_url is not a valid URL: %w", err))
 		}
+	}
+
+	// An empty level is a patch, but an invalid level is an error
+	if c.SemverLevel != "" && !slices.Contains(SemverLevels, c.SemverLevel) {
+		errs = append(errs, fmt.Errorf("semver_level %q is not one of: %s",
+			c.SemverLevel, strings.Join(SemverLevels, ", ")))
+	}
+
+	// TODO(semver-level): remove with the field itself.
+	if c.IsBreaking && c.SemverLevel != "" && c.SemverLevel != SemverLevelMajor {
+		errs = append(errs, fmt.Errorf("is_breaking is set but semver_level is %q; a breaking change is %s",
+			c.SemverLevel, SemverLevelMajor))
 	}
 
 	for i, tag := range c.JiraTicketsClosed {

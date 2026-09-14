@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -27,6 +30,11 @@ func newNewCmd(g *globalFlags) *cobra.Command {
 				return errors.New("pass either --body or --body-file, not both")
 			}
 
+			if draft.SemverLevel != "" && !slices.Contains(changefile.SemverLevels, draft.SemverLevel) {
+				return fmt.Errorf("--semver-level must be one of: %s",
+					strings.Join(changefile.SemverLevels, ", "))
+			}
+
 			newOpts := changelog.NewOptions{BodyPath: bodyFile, User: user}
 			if len(args) > 0 {
 				newOpts.Slug = args[0]
@@ -43,6 +51,9 @@ func newNewCmd(g *globalFlags) *cobra.Command {
 	f.StringVar(&draft.Title, "title", "", "the changelog bullet's text (defaults to the pull request's title)")
 	f.StringVar(&draft.PRUrl, "pr-url", "", "URL of the pull request (defaults to the PR of the current branch, if available)")
 	f.StringVar(&draft.Section, "section", "", "heading to group this change under")
+	f.StringVar(&draft.SemverLevel, "semver-level", "",
+		"size of the version bump this change calls for: "+strings.Join(changefile.SemverLevels, ", ")+" (defaults to patch)")
+	// TODO(semver-level): remove in favour of --semver-level major.
 	f.BoolVar(&draft.IsBreaking, "breaking", false, "mark the change as breaking")
 	f.BoolVar(&draft.IsStripeAPIChange, "stripe-api-change", false, "mark the change as the result of an API spec bump")
 	f.StringArrayVar(&draft.JiraTicketsClosed, "jira-tag", nil, "Jira ticket reference (like DEVSDK-123); repeat for more than one")

@@ -189,6 +189,29 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func TestNewWritesTheSemverLevel(t *testing.T) {
+	fs := harkFs(t)
+
+	_, err := runFs(t, fs, "new", "add-widgets", "--title", "Add widgets", "--semver-level", "minor")
+	require.NoError(t, err)
+
+	paths, err := afero.Glob(fs, ".hark/changes/*_add-widgets.change.md")
+	require.NoError(t, err)
+	require.Len(t, paths, 1)
+
+	written, err := afero.ReadFile(fs, paths[0])
+	require.NoError(t, err)
+	assert.Contains(t, string(written), "semver_level: minor")
+}
+
+// A level nobody can read fails the command rather than being written for CI to reject
+// later, which matters most to the automation that passes it.
+func TestNewRejectsAnUnknownSemverLevel(t *testing.T) {
+	_, err := run(t, "new", "add-widgets", "--title", "Add widgets", "--semver-level", "breaking")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "major, minor, patch")
+}
+
 func TestNewRejectsExtraArgs(t *testing.T) {
 	_, err := run(t, "new", "add-widgets", "unexpected")
 	require.Error(t, err)

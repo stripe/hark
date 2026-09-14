@@ -367,7 +367,7 @@ func renderChange(w io.Writer, c *changefile.Changefile) error {
 
 	b.WriteString("* ")
 
-	if c.IsBreaking {
+	if c.Level() == changefile.SemverLevelMajor {
 		b.WriteString(warningMarker)
 		b.WriteString(" ")
 	}
