@@ -20,7 +20,7 @@ const (
 	DateFormat = time.DateOnly
 
 	// This is the default slug if one isn't provided
-	// It's deliberately fails validation in [ValidateName] (so it's replaced with a real value before merge) but it's a fine placeholder
+	// It deliberately fails validation in [ValidateName] (so it's replaced with a real value before merge) but it's a fine placeholder
 	FixmeSlug = "FIXME"
 )
 

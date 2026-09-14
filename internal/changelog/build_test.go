@@ -133,6 +133,30 @@ func TestBuild_RendersVersionsWithNoChanges(t *testing.T) {
 	assert.Contains(t, got, "## <a id=\"1-1-0\"></a>1.1.0 - 2024-02-01\n\n## <a id=\"1-0-0\"></a>1.0.0 - 2024-01-15\n")
 }
 
+// An entry recorded before it ships has no date to put in its heading, and still gets
+// the anchor that links to it.
+func TestBuild_ReleaseWithNoDateHeadsWithJustItsVersion(t *testing.T) {
+	fs := buildFixture(t, `{"releases":[{"version":"1.0.0","released_on":""}]}`,
+		map[string]string{"a.change.md": "---\ntitle: \"Shipped\"\nreleased_in_version: \"1.0.0\"\n---\n"})
+
+	assert.Contains(t, build(t, fs), "## <a id=\"1-0-0\"></a>1.0.0\n* Shipped\n")
+}
+
+// Some older changes cite the issue they closed rather than a pull request, and those
+// link the same way — the number is what the reader wants either way.
+func TestBuild_IssueURLLinksLikeAPullRequest(t *testing.T) {
+	fs := buildFixture(t, `{"releases":[{"version":"1.0.0","released_on":"2024-01-15"}]}`,
+		map[string]string{
+			"a.change.md": "---\ntitle: \"Fix retries\"\npr_url: \"https://github.com/stripe/stripe-go/issues/7\"\nreleased_in_version: \"1.0.0\"\n---\n",
+			"b.change.md": "---\ntitle: \"Add widgets\"\npr_url: \"https://github.com/stripe/stripe-go/pull/41/\"\nreleased_in_version: \"1.0.0\"\n---\n",
+		})
+
+	got := build(t, fs)
+	assert.Contains(t, got, "* [#7](https://github.com/stripe/stripe-go/issues/7) Fix retries\n")
+	// A trailing slash is still a well-formed link, not a URL we could not read a number from.
+	assert.Contains(t, got, "* [#41](https://github.com/stripe/stripe-go/pull/41/) Add widgets\n")
+}
+
 // Two versions that differ only in where their dots fall get distinct anchors. GitHub
 // drops dots when it derives one from a heading, so "11.0.0" and "1.10.0" would both
 // reduce to "1100" — a collision four of the seven SDK changelogs contain.

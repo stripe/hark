@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/afero"
 
 	"github.com/stripe/hark/changefile"
+	"github.com/stripe/hark/releases"
 )
 
 const (
@@ -74,7 +75,7 @@ func IntroName(version string) string {
 	return introPrefix + version + ".md"
 }
 
-// given a filename, get the version it represents (if any)
+// given a filename, get the version it represents (if any). The version portion has to pass [releases.IsVersionValid] since it'll never be found by a version otherwise.
 func IntroVersion(name string) (string, bool) {
 	version, ok := strings.CutPrefix(name, introPrefix)
 	if !ok {
@@ -82,7 +83,7 @@ func IntroVersion(name string) (string, bool) {
 	}
 
 	version, ok = strings.CutSuffix(version, ".md")
-	if !ok || version == "" {
+	if !ok || !releases.IsVersionValid(version) {
 		return "", false
 	}
 	return version, true

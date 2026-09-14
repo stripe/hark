@@ -63,6 +63,10 @@ func TestInsert_NewestGoesFirst(t *testing.T) {
 
 	assert.Equal(t, 0, f.Insert(Release{Version: "1.2.0", ReleasedOn: "2026-03-01"}))
 	assert.Equal(t, "1.2.0", f.Releases[0].Version)
+
+	// An older release inserted afterwards slots in under it rather than displacing it.
+	assert.Equal(t, 1, f.Insert(Release{Version: "1.1.1", ReleasedOn: "2026-02-05"}))
+	assert.Equal(t, []string{"1.2.0", "1.1.1", "1.1.0", "1.0.0"}, versionStrings(f))
 }
 
 // The case AddVersion gets wrong: these repos keep old lines alive, so a patch

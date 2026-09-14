@@ -40,7 +40,7 @@ type ghPullRequest struct {
 // CurrentPR shells out to `gh pr view` for the current branch's pull request.
 //
 // A non-zero exit is reported as "no pull request" rather than a true error, because
-// that't the `gh` behavior both when the branch has no PR or the user isn't logged in.
+// that's the `gh` behavior both when the branch has no PR or the user isn't logged in.
 func (ghFinder) CurrentPR(ctx context.Context) (*PullRequest, error) {
 	cmd := exec.CommandContext(ctx, "gh", "pr", "view",
 		"--json", "url,title,headRefName")

@@ -4,14 +4,11 @@ export PATH := home_directory() + "/go/bin:" + env('PATH')
 
 golangci_lint_version := "v2.11.4"
 
-# shared by the justfile and the CI installer
-zizmor_version := "1.29.0"
-
 _default:
     just --list --unsorted
 
 # run every check CI runs, so a green run here means a green run there
-prepare: test format lint zizmor
+prepare: test format lint (zizmor "-qq")
 
 # run all unit tests
 test *args="./...":
@@ -33,8 +30,8 @@ lint-fix:
     go vet -fix ./...
 
 # audit the workflows and composite actions for security problems
-zizmor:
-    uvx zizmor@{{ zizmor_version }} --min-severity high .
+zizmor *args:
+    zizmor --min-severity high . {{ args }}
 
 # format all Go files
 format:

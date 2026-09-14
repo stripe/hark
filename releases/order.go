@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// A regex to to match prerelease suffixes like `-beta.2` or `a3`
+// A regex to match prerelease suffixes like `-beta.2` or `a3`
 var prereleaseRegex = regexp.MustCompile(`^(?:-(alpha|beta)\.(0|[1-9][0-9]*)|(a|b)(0|[1-9][0-9]*))$`)
 
 // match a semver version without any suffix

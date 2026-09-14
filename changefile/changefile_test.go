@@ -21,7 +21,7 @@ func TestParse(t *testing.T) {
 title: "Added a new method to stripeClient"
 pr_url: "https://github.com/stripe/stripe-go/pulls/123"
 is_breaking: true
-is_stripe_api_change: true
+is_stripe_api_change: false
 jira_tickets_closed:
   - DEVSDK-123
   - DEVSDK-456
@@ -58,6 +58,18 @@ title: "Simple change"
 `,
 			want: &Changefile{
 				Title: "Simple change",
+			},
+		},
+		{
+			name: "stripe api change",
+			input: `---
+title: "update generated code"
+is_stripe_api_change: true
+---
+`,
+			want: &Changefile{
+				Title:             "update generated code",
+				IsStripeAPIChange: true,
 			},
 		},
 		{

@@ -470,3 +470,38 @@ func TestRelease_AcceptsAVersionInTheFilesChannel(t *testing.T) {
 	assert.Equal(t, "1.2.0-beta.1",
 		read(t, fs, changesFixtureDir+"/2026-09-08_xavdid_add-widgets.change.md").ReleasedInVersion)
 }
+
+// `1.0.0b1` and `1.0.0-beta.1` are one release spelled two ways, so cutting one while the
+// other is recorded would put two entries in the file for a single release — which validate
+// rejects, but only after the release had been written.
+func TestRelease_RefusesAVersionAlreadyRecordedUnderAnotherSpelling(t *testing.T) {
+	fs, opts := releaseFixture(t,
+		`{"metadata":{"language":"python","channel":"beta"},"releases":[{"version":"1.0.0-beta.1","released_on":"2026-09-08"}]}`,
+		map[string]string{"2026-09-08_xavdid_add-widgets.change.md": pendingChangefile})
+
+	err := Release(context.Background(), opts, releases.Release{Version: "1.0.0b1"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "1.0.0b1 is already recorded as 1.0.0-beta.1")
+
+	// The one entry stands, and the pending changefile was not stamped with either spelling.
+	recorded := releasedVersions(t, fs).Releases
+	require.Len(t, recorded, 1)
+	assert.Equal(t, "1.0.0-beta.1", recorded[0].Version)
+	assert.Empty(t, read(t, fs, changesFixtureDir+"/2026-09-08_xavdid_add-widgets.change.md").ReleasedInVersion)
+}
+
+// The spelling already in the file is of course accepted, so a rerun of the same release is
+// still the no-op it was.
+func TestRelease_AcceptsTheSpellingAlreadyRecorded(t *testing.T) {
+	fs, opts := releaseFixture(t,
+		`{"metadata":{"language":"python","channel":"beta"},"releases":[{"version":"1.0.0b1","released_on":"2026-09-08"}]}`,
+		map[string]string{"2026-09-08_xavdid_add-widgets.change.md": pendingChangefile})
+
+	require.NoError(t, Release(context.Background(), opts, releases.Release{Version: "1.0.0b1"}))
+
+	recorded := releasedVersions(t, fs).Releases
+	require.Len(t, recorded, 1)
+	assert.Equal(t, "1.0.0b1", recorded[0].Version)
+	assert.Equal(t, "1.0.0b1",
+		read(t, fs, changesFixtureDir+"/2026-09-08_xavdid_add-widgets.change.md").ReleasedInVersion)
+}

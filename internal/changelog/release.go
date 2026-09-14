@@ -18,7 +18,8 @@ import (
 // The repo has to pass [Validate] first, so a release cannot bake a placeholder title or
 // a half-written changefile into the changelog.
 //
-// An entry for the version may already exist. Existing values are overwritten with new ones.
+// An entry for the version may already exist. Values it records are kept, and anything passed
+// that contradicts one is an error.
 func Release(ctx context.Context, opts Options, release releases.Release) error {
 	opts = opts.withDefaults()
 
@@ -127,6 +128,13 @@ func placeRelease(releaseFile *releases.File, release releases.Release, today st
 	}
 	existing := &releaseFile.Releases[index]
 
+	// The match is by meaning, not spelling, so an entry can be found under a name that isn't
+	// the one passed. Recording both would break the file's one-entry-per-release invariant.
+	if existing.Version != release.Version {
+		return nil, fmt.Errorf("%s is already recorded as %s, which is the same release; cut it under that name",
+			release.Version, existing.Version)
+	}
+
 	fields := []struct {
 		name     string
 		stored   *string
@@ -165,9 +173,11 @@ func placeRelease(releaseFile *releases.File, release releases.Release, today st
 }
 
 // indexOf is the position of version in released, or -1 when it is not there.
+//
+// Versions are matched using a normalized value rather than by string match, since `1.0.0b1` and `1.0.0-beta.1` should be treated as duplicates
 func indexOf(released *releases.File, version string) int {
 	for i := range released.Releases {
-		if released.Releases[i].Version == version {
+		if releases.Compare(released.Releases[i].Version, version) == 0 {
 			return i
 		}
 	}

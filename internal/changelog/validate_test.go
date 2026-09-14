@@ -301,6 +301,23 @@ func TestValidate_CatchesAMisnamedIntro(t *testing.T) {
 	assert.Contains(t, err.Error(), "1/1 intros are invalid")
 }
 
+// A version-shaped name is the other half of being found: nothing will ever match an
+// intro named after something that cannot be a release, so it is as dead as a typo'd one.
+func TestValidate_CatchesAnIntroNamedAfterANonVersion(t *testing.T) {
+	for _, name := range []string{"intro-1.md", "intro-1.2.md", "intro-next.md", "intro-1.0.0-rc.1.md"} {
+		t.Run(name, func(t *testing.T) {
+			fs := buildFixture(t, `{`+gaMetadata+`"releases":[{"version":"1.0.0","released_on":"2026-01-15"}]}`,
+				map[string]string{"2026-01-14_xavdid_add-widgets.change.md": goodChangefile})
+			require.NoError(t, afero.WriteFile(fs, introsFixtureDir+"/"+name, []byte("Prose.\n"), 0o644))
+
+			out, err := runValidate(t, fs)
+			require.Error(t, err)
+			assert.Contains(t, out, name)
+			assert.Contains(t, err.Error(), "1/1 intros are invalid")
+		})
+	}
+}
+
 // Writing an intro before the release it belongs to is a normal way to work — the
 // prose for a major version gets drafted well ahead of the cut — so an intro for a
 // version that does not exist yet is accepted and simply sits unused.
@@ -496,4 +513,31 @@ func TestValidate_SeparatesUnreadableFromMisplaced(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, out, "1/3 releases are not valid versions (including not-a-version)")
 	assert.Contains(t, out, "1/3 releases belong to a different channel (including 1.1.0-beta.1)")
+}
+
+// released_on is a lexical sort key and a rendered heading, so a value that isn't a date
+// silently misorders the changelog rather than failing anywhere.
+func TestValidate_RejectsAReleaseDateThatIsNotADate(t *testing.T) {
+	for _, date := range []string{"2026-99-99", "2026-1-15", "01-15-2026", "yesterday", "2026-01-15T00:00:00Z"} {
+		t.Run(date, func(t *testing.T) {
+			fs := buildFixture(t, `{`+gaMetadata+`"releases":[{"version":"1.0.0","released_on":"`+date+`"}]}`,
+				map[string]string{"2026-01-14_xavdid_add-widgets.change.md": goodChangefile})
+
+			out, err := runValidate(t, fs)
+			require.Error(t, err)
+			assert.Contains(t, out, "1/1 releases have a released_on that is not a date")
+			assert.Contains(t, out, fmt.Sprintf("1.0.0 (%q)", date))
+		})
+	}
+}
+
+// An entry can be recorded before it is dated: `release` fills the date in, and a release
+// without one renders under a heading of just its version.
+func TestValidate_AcceptsAReleaseWithNoDate(t *testing.T) {
+	fs := buildFixture(t, `{`+gaMetadata+`"releases":[{"version":"1.0.0","released_on":""}]}`,
+		map[string]string{"2026-01-14_xavdid_add-widgets.change.md": goodChangefile})
+
+	out, err := runValidate(t, fs)
+	require.NoError(t, err)
+	assert.Contains(t, out, "validated 1 changefiles")
 }

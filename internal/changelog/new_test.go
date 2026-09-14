@@ -277,6 +277,45 @@ func TestNew_UsesAnExplicitSlug(t *testing.T) {
 	assert.NotContains(t, out.String(), "rename it")
 }
 
+// A slug is one segment of a filename, so anything with a separator in it would land
+// somewhere other than where the name says (including outside .hark/changes entirely,
+// where nothing would ever read it).
+func TestNew_RefusesASlugWithPathSeparators(t *testing.T) {
+	for _, slug := range []string{"a/b", "../other", "/../../other", "nested/dir/change", "../"} {
+		t.Run(slug, func(t *testing.T) {
+			fs, _, opts := newFixture(t)
+
+			_, err := newChange(t, opts,
+				changefile.Changefile{Title: "Add widgets"}, NewOptions{Slug: slug})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "path separators")
+
+			// Nothing was written, in .hark/changes or anywhere above it.
+			for _, dir := range []string{changesFixtureDir, ".hark", ".", ".."} {
+				entries, err := afero.ReadDir(fs, dir)
+				if err != nil {
+					continue // the directory was never created, which is just as empty
+				}
+				for _, e := range entries {
+					assert.NotContains(t, e.Name(), changefile.Extension, "wrote %s/%s", dir, e.Name())
+				}
+			}
+		})
+	}
+}
+
+// A user, which automation passes and the shell otherwise supplies, is a segment of the
+// same name and is held to the same rule.
+func TestNew_RefusesAUserWithPathSeparators(t *testing.T) {
+	_, _, opts := newFixture(t)
+
+	_, err := newChange(t, opts,
+		changefile.Changefile{Title: "Add widgets"},
+		NewOptions{Slug: "add-widgets", User: "../../other"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "path separators")
+}
+
 // The same person, day and slug twice is refused rather than written alongside: the
 // first file is either the change already written or is named too vaguely to tell
 // them apart, and both are better fixed than duplicated.

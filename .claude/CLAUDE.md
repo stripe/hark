@@ -41,9 +41,10 @@ Because it is found purely by name, `validate` is what catches a misnamed one �
 an intro for an unreleased version is valid and ignored until that version is cut,
 so intros can be drafted ahead of the release.
 
-Changefile names (`{date}_{user}_{slug}.change.md`) must lead with the date: the
-changelog orders changes within a release by filename, oldest first — except that a
-change marked `is_stripe_api_change` sorts last whatever it is named.
+Changefile names (`{date}_{user}_{slug}.change.md`, where `{date}` is `YYYY-MM-DD`)
+must lead with the date: the changelog orders changes within a release by filename,
+oldest first — except that a change marked `is_stripe_api_change` sorts last whatever
+it is named. Release dates in `releases.json` use that same format.
 
 ## Conventions
 

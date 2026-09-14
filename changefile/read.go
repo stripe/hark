@@ -10,7 +10,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// controls how [ReadAll] and [ReadEvery] walk and parse a directory tree.
+// controls how [ReadAll] and [ReadAllOrFail] walk and parse a directory tree.
 type ReadOptions struct {
 	// caps how many files are parsed concurrently; defaults to the number of available CPUs
 	Workers int
@@ -35,12 +35,12 @@ type ReadResult struct {
 	Err error
 }
 
-// ReadAll recursively discovers every changefile under `root` and parses them in
+// ReadAll discovers every changefile under `root` and parses them in
 // parallel using a bounded worker pool, in sorted path order. Non `.change.md` files are ignored.
 //
-// Returns a [ReadResult] for every changefile, regardless of if parsing was successful. It only errors if the recursion itself is unsuccessful.
+// Returns a [ReadResult] for every changefile, regardless of if parsing was successful. It only errors if the walk itself is unsuccessful.
 //
-// Callers that want to stop on the first failure should use [ReadEvery] instead.
+// Callers that want to stop on the first failure should use [ReadAllOrFail] instead.
 func ReadAll(ctx context.Context, fs afero.Fs, root string, opts ReadOptions) ([]ReadResult, error) {
 	paths, err := GetAllPaths(fs, root)
 	if err != nil {
@@ -72,8 +72,8 @@ func ReadAll(ctx context.Context, fs afero.Fs, root string, opts ReadOptions) ([
 	return results, nil
 }
 
-// ReadEvery is [ReadAll] for callers who need every available changefile to be structurally valid. It fails on the first file that could not be read or parsed.
-func ReadEvery(ctx context.Context, fs afero.Fs, root string, opts ReadOptions) ([]*Changefile, error) {
+// ReadAllOrFail is [ReadAll] for callers who need every available changefile to be structurally valid. It fails on the first file that could not be read or parsed.
+func ReadAllOrFail(ctx context.Context, fs afero.Fs, root string, opts ReadOptions) ([]*Changefile, error) {
 	results, err := ReadAll(ctx, fs, root, opts)
 	if err != nil {
 		return nil, err

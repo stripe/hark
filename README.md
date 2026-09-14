@@ -23,7 +23,7 @@ Each user-facing PR needs a corresponding `.change.md` file. Create one by runni
 
 ## Writing a great changelog
 
-- No one like AI prose. Write it yourself and respect your reader's time
+- No one likes AI prose. Write it yourself and respect your reader's time
 - Readers will scan our changelog to determine if there's anything new or interesting they can take advantage of with their Stripe integration.
   - mention new classnames/methods exactly, so users can copy from the changelog and use new stuff in their code without having to think too hard about it
 - We want to mention what's new and who might be able to take advantage of it
@@ -36,7 +36,7 @@ Each user-facing PR needs a corresponding `.change.md` file. Create one by runni
 
 - You should explain what changed, but focus on the resulting user impact.
   - ❌ We moved all our event code to a new directory
-  - ✅ Import paths have changed. You'll have to adjust anywhere call `from stripe.something import ...`.
+  - ✅ Import paths have changed. You'll have to adjust anywhere you call `from stripe.something import ...`.
 - Before/after code blocks are very useful!
 
 ## Architecture
@@ -56,7 +56,7 @@ stripe-<lang>/
 └── CHANGELOG.md
 ```
 
-- `releases.json` is a manifest of all of the released version of an SDK, including the date, its pinned API version (if any) and minimum supported language version
+- `releases.json` is a manifest of all of the released versions of an SDK, including the date, its pinned API version (if any) and minimum supported language version
 - `changefiles` are little markdown fragments w/ metadata describing a user-facing change to an SDK. They have the extension `.change.md`
 - `intro-<VERSION>.md` is a bit of prose that goes after a version header but before any changes are listed. It's a good place to make announcements, summarize/highlight features, or anything else!
 

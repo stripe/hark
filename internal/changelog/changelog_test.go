@@ -95,6 +95,13 @@ func TestIntroVersion_RejectsNamesThatWouldNeverBeFound(t *testing.T) {
 		"intro.md",       // neither
 		"README.md",      // something else entirely
 		"Intro-1.2.3.md", // wrong case
+
+		// named after something no release could be called
+		"intro-1.md",
+		"intro-1.2.md",
+		"intro-1.2.3.4.md",
+		"intro-next.md",
+		"intro-1.0.0-rc.1.md",
 	} {
 		_, ok := IntroVersion(name)
 		assert.False(t, ok, "%q should not be accepted", name)

@@ -60,6 +60,42 @@ func TestSplitFrontmatter(t *testing.T) {
 			wantYAML: "title: hi\n",
 			wantBody: "",
 		},
+		{
+			name:     "leading blank lines are ignored",
+			input:    "\n\n---\ntitle: hello\n---\nbody\n",
+			wantYAML: "title: hello\n",
+			wantBody: "body\n",
+		},
+		{
+			// a leading newline with nothing else is still missing its delimiter
+			name:    "only a leading newline",
+			input:   "\n",
+			wantErr: ErrNoFrontmatter,
+		},
+		{
+			name:     "a value ending in the delimiter does not close the frontmatter",
+			input:    "---\ntitle: \"the --- separator\"\nsection: ---\n---\nbody\n",
+			wantYAML: "title: \"the --- separator\"\nsection: ---\n",
+			wantBody: "body\n",
+		},
+		{
+			name:     "an indented delimiter does not close the frontmatter",
+			input:    "---\ntitle: >\n  one\n  ---\n  two\n---\nbody\n",
+			wantYAML: "title: >\n  one\n  ---\n  two\n",
+			wantBody: "body\n",
+		},
+		{
+			name:     "a delimiter in the body is left alone",
+			input:    "---\ntitle: hi\n---\nbody\n\n---\n\nmore body\n",
+			wantYAML: "title: hi\n",
+			wantBody: "body\n\n---\n\nmore body\n",
+		},
+		{
+			name:     "empty frontmatter",
+			input:    "---\n---\nbody\n",
+			wantYAML: "",
+			wantBody: "body\n",
+		},
 	}
 
 	for _, tt := range tests {

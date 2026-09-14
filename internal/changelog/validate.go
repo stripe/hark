@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/spf13/afero"
 
@@ -24,7 +25,16 @@ type fileReport struct {
 
 const versionFormatHint = "expected major.minor.patch, optionally followed by an alpha or beta suffix"
 
-// validates the holistic state state of a repo. See the individual check* functions for what we look for
+const dateFormatHint = "expected an ISO date, like 2026-01-22"
+
+// validates the holistic state of a repo, reporting everything that's wrong rather than the
+// first thing. Each check has a check*/validate* function below:
+//
+//   - changefiles: the shape of the filename, that the frontmatter parses, that the fields are
+//     well-formed, and that a pr_url or resolved issue points at this repo
+//   - `released_in_version`: it's a valid version and the releases file has a record for it
+//   - intros: the name is one a release could match, so the file won't be silently ignored
+//   - the releases file: its metadata, that every release is a valid version and date in the file's channel, and that the entries are unique and in order
 func Validate(ctx context.Context, opts Options) error {
 	_, err := validate(ctx, opts)
 	return err
@@ -149,7 +159,7 @@ func checkMetadata(releasesFile *releases.File) []fileReport {
 	}
 
 	// check each release's version for validity and that it's in the right channel
-	var unreadable, wrongChannel []string
+	var unreadable, wrongChannel, badDates []string
 	for _, release := range releasesFile.Releases {
 		versionChannel, ok := releases.Channel(release.Version)
 		switch {
@@ -157,6 +167,12 @@ func checkMetadata(releasesFile *releases.File) []fileReport {
 			unreadable = append(unreadable, release.Version)
 		case channelKnown && versionChannel != channel:
 			wrongChannel = append(wrongChannel, release.Version)
+		}
+
+		if release.ReleasedOn != "" {
+			if _, err := time.Parse(changefile.DateFormat, release.ReleasedOn); err != nil {
+				badDates = append(badDates, fmt.Sprintf("%s (%q)", release.Version, release.ReleasedOn))
+			}
 		}
 	}
 
@@ -168,6 +184,10 @@ func checkMetadata(releasesFile *releases.File) []fileReport {
 	if len(wrongChannel) > 0 {
 		errs = append(errs, fmt.Errorf("metadata.channel is %q but %d/%d releases belong to a different channel (including %s)",
 			channel, len(wrongChannel), total, firstFew(wrongChannel)))
+	}
+	if len(badDates) > 0 {
+		errs = append(errs, fmt.Errorf("%d/%d releases have a released_on that is not a date, %s (including %s)",
+			len(badDates), total, dateFormatHint, firstFew(badDates)))
 	}
 
 	if before, after, unsorted := releasesFile.Unsorted(); unsorted {

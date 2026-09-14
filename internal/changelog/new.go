@@ -141,7 +141,11 @@ func seedFromPR(draft *changefile.Changefile, pr *PullRequest) {
 
 // builds the path for a new changefile given its component parts. errors if there's a file there already
 func newPath(opts Options, dir, date, user, slug string) (string, error) {
-	path := filepath.Join(dir, changefile.Name(date, user, slug))
+	name := changefile.Name(date, user, slug)
+	path := filepath.Join(dir, name)
+	if filepath.Base(path) != name {
+		return "", fmt.Errorf("changefile name must not contain path separators")
+	}
 
 	exists, err := afero.Exists(opts.Fs, path)
 	if err != nil {

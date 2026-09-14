@@ -27,24 +27,39 @@ runs:
       run: |
         set -euo pipefail
 
-        # Gets the changed file list from the API rather than a checkout, which is faster.
-        added=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}/files" --paginate \
-          --jq '.[] | select(.status == "added") | .filename' |
-          grep -E '^\.hark/changes/[^/]+\.change\.md$' || true)
+        # Lists the changefiles in one commit, from the API rather than a checkout. The trees
+        # endpoint takes a `<sha>:<path>`, so this is a single request no matter how many
+        # files the pull request touches.
+        #
+        # Nested directories are `tree` entries rather than `blob`s, so they're skipped along
+        # with anything inside them: a changefile is only read at the top of `.hark/changes`.
+        changefiles() {
+          local out
+          if ! out=$(gh api "repos/${GH_REPO}/git/trees/${1}:.hark/changes" \
+              --jq '.tree[] | select(.type == "blob") | .path' 2>&1); then
+            # A branch without the directory (the first changefile ever, or a fork of a repo
+            # that predates hark) has no changefiles in it, which is not an error.
+            case "$out" in
+              *"Not Found"*) return 0 ;;
+              *) echo "::error::could not list .hark/changes at ${1}: ${out}"; return 1 ;;
+            esac
+          fi
+          printf '%s\n' "$out"
+        }
+
+        base_files=$(changefiles "$BASE_SHA" | sort)
+        head_files=$(changefiles "$HEAD_SHA" | sort)
+
+        # Only what this pull request brought: present at its head, absent from its base.
+        added=$(comm -13 <(printf '%s\n' "$base_files") <(printf '%s\n' "$head_files") |
+          grep -E '\.change\.md$' || true)
 
         if [ -n "$added" ]; then
           echo "this pull request adds:"
           while IFS= read -r path; do
-            echo "  ${path}"
+            echo "  .hark/changes/${path}"
           done <<<"$added"
           exit 0
-        fi
-
-        # The files endpoint stops at 3000 entries, so we can't be sure if a big PR has one
-        # We'll fail and leave it up to the reviewer to confirm
-        if [ "${CHANGED_FILES:-0}" -ge 3000 ]; then
-          echo "::error::This pull request touches ${CHANGED_FILES} files and GitHub only reports the first 3000, so this check cannot tell whether it adds a changefile. Check the \`skip-changefile\` box if you have one (honor system)."
-          exit 1
         fi
 
         echo "::error::This pull request adds no changefile. Run \`hark new\` to write one, or check the \`skip-changefile\` box in the description if this isn't a user-facing change."
@@ -52,5 +67,5 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
-        CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}

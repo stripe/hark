@@ -43,7 +43,7 @@ func Build(ctx context.Context, opts Options) error {
 
 // loadAllData preps everything we need to render a changelog
 func loadAllData(ctx context.Context, opts Options) (*releases.File, []releaseGroup, error) {
-	changes, err := changefile.ReadEvery(ctx, opts.Fs, opts.changesDir(), opts.ReadOptions)
+	changes, err := changefile.ReadAllOrFail(ctx, opts.Fs, opts.changesDir(), opts.ReadOptions)
 	if err != nil {
 		return nil, nil, err
 	}
