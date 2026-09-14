@@ -1,0 +1,66 @@
+name: "Setup hark"
+description: "Download the hark binary and add it to PATH"
+
+inputs:
+  version:
+    description: "Release tag to install, or 'latest'"
+    required: false
+    default: "latest"
+
+outputs:
+  version:
+    description: "The release that was installed, with 'latest' resolved to a tag"
+    value: ${{ steps.install.outputs.version }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install hark
+      id: install
+      shell: bash
+      # Downloading the release archive rather than `go install`ing because most SDKs don't have the Go toolchain set up
+      #
+      # The zizmor ignore is for the `$GITHUB_PATH` write at the bottom. github-env
+      # fires on any write to that file from a shell, whatever the value, and
+      # putting a binary on PATH is the entire job of a setup action.
+      # `actions/setup-go` and `setup-node` do the same append.
+
+      # The audit is meant to catch attacker-controlled values reaching PATH under a privileged
+      # trigger. We're hardcoding a value and never running with untrusted input, so it's fine
+      run: | # zizmor: ignore[github-env]
+        set -euo pipefail
+
+        VERSION="${INPUTS_VERSION}"
+        if [ "$VERSION" = "latest" ]; then
+          VERSION=$(gh release view --repo "${INPUTS_REPO}" --json tagName --jq .tagName)
+        fi
+
+        # Matches the names .goreleaser.yml builds: hark_{os}_{arch}.tar.gz.
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+        ARCHIVE="hark_${OS}_${ARCH}.tar.gz"
+
+        # Unpacking into RUNNER_TEMP and prepending that to PATH, rather than
+        # untarring into /usr/local/bin, avoids assuming a writable system
+        # directory that container and self-hosted runners don't always give us.
+        DEST="${RUNNER_TEMP}/hark"
+        mkdir -p "$DEST"
+
+        gh release download "$VERSION" \
+          --repo "${INPUTS_REPO}" \
+          --pattern "$ARCHIVE" \
+          --dir "$RUNNER_TEMP"
+
+        tar -xzf "${RUNNER_TEMP}/${ARCHIVE}" -C "$DEST"
+        chmod +x "${DEST}/hark"
+
+        echo "$DEST" >>"$GITHUB_PATH"
+        echo "version=${VERSION}" >>"$GITHUB_OUTPUT"
+
+        echo "installed hark to ${DEST}"
+        "${DEST}/hark" --version
+      env:
+        INPUTS_VERSION: ${{ inputs.version }}
+        INPUTS_REPO: stripe/hark
+        # used by `gh`
+        GH_TOKEN: ${{ github.token }}

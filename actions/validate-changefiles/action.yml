@@ -1,0 +1,11 @@
+name: "Validate changefiles"
+description: "Run `hark validate` over every changefile in the repository. Needs the repo checked out already."
+
+runs:
+  using: "composite"
+  steps:
+    - uses: $/actions/setup-hark
+
+    - name: Validate changefiles
+      shell: bash
+      run: hark validate # looks for the repo's root `.hark` directory

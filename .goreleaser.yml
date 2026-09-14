@@ -1,0 +1,28 @@
+version: 2
+
+project_name: hark
+
+builds:
+  - main: .
+    binary: hark
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    # only need builds for github runners and our laptops
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+
+changelog:
+  # Our changelogs are handwritten, so don't generate any
+  disable: true
+
+release:
+  header: |
+    See [the changelog](https://github.com/stripe/hark/blob/master/CHANGELOG.md#{{ .Major }}{{ .Minor }}{{ .Patch }}) for release notes.
