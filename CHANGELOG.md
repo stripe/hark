@@ -2,6 +2,6 @@
 
 ## 0.1.0
 
-_released `TBD`_
+_released `2026-09-14`_
 
 - initial public release!
