@@ -35,6 +35,10 @@ type Release struct {
 	// the Stripe API version this release was pinned to. Empty for SDKs without pinned versions.
 	PinnedAPIVersion string `json:"pinned_api_version,omitempty"`
 	// the lowest version of the host language this release supports, e.g. "3.10" for Python. May be missing for some releases if we weren't able to backfill it with enough certainty.
+	//
+	// 6/7 of our SDKs have a single version identifier in this field; dotnet is the exception.
+	// It tracks two different runtimes with independent floors. So it uses a comma-separated list of `label=value` segments like `"core=net6.0,framework=net462"`.
+	// Either half may be absent, so consumers should parse based on label, not position in the string
 	MinimumRuntimeVersion string `json:"minimum_runtime_version,omitempty"`
 }
 
