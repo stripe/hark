@@ -56,6 +56,7 @@ is what earns the ⚠️ in the changelog and what the migration-guide check loo
 
 - Go version: whatever `go.mod` declares (CI reads `go-version-file: go.mod`)
 - Exported identifiers get doc comments; every package has a package comment
+- Comments should be **CONCISE** and **SPECIFIC**.
 - Avoid stutter in the public API (`releases.ReadFile`, not `releases.ReadVersionsFile`)
 - CLI commands only parse args and call into `internal/changelog`; no business logic in `cmd/`
 - Build the command tree with a constructor instead of package-level `var`s, so tests get independent trees and flag state can't leak
@@ -68,10 +69,10 @@ is what earns the ⚠️ in the changelog and what the migration-guide check loo
 
 ## Dependencies
 
-| Package | Purpose |
-|---------|---------|
-| `github.com/spf13/cobra` | CLI framework |
-| `github.com/goccy/go-yaml` | YAML deserialization |
-| `github.com/spf13/afero` | Filesystem abstraction (testing) |
-| `github.com/stretchr/testify` | Test assertions |
-| `golang.org/x/sync/errgroup` | Parallel file reading |
+| Package                       | Purpose                          |
+| ----------------------------- | -------------------------------- |
+| `github.com/spf13/cobra`      | CLI framework                    |
+| `github.com/goccy/go-yaml`    | YAML deserialization             |
+| `github.com/spf13/afero`      | Filesystem abstraction (testing) |
+| `github.com/stretchr/testify` | Test assertions                  |
+| `golang.org/x/sync/errgroup`  | Parallel file reading            |

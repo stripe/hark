@@ -330,6 +330,22 @@ func TestBuild_BodyIndentation(t *testing.T) {
 	assert.Contains(t, build(t, fs), "* Nested\n  - outer\n    - inner\n\n  - after a blank\n")
 }
 
+// A prose body is its own paragraph under the bullet. Without the blank line markdown
+// runs it together with the title on one line.
+func TestBuild_ProseBodyIsSeparatedFromTitle(t *testing.T) {
+	fs := buildFixture(t, `{"releases":[{"version":"1.0.0","released_on":"2024-01-15"}]}`,
+		map[string]string{
+			"a.change.md": "---\ntitle: \"Prose\"\nreleased_in_version: \"1.0.0\"\n---\n\n" +
+				"Some detail, at length.\n",
+			"b.change.md": "---\ntitle: \"Code\"\nreleased_in_version: \"1.0.0\"\n---\n\n" +
+				"```go\nx := 1\n```\n",
+		})
+
+	got := build(t, fs)
+	assert.Contains(t, got, "* Prose\n\n  Some detail, at length.\n")
+	assert.Contains(t, got, "* Code\n\n  ```go\n  x := 1\n  ```\n")
+}
+
 func TestBuild_UnknownVersionListsEveryOffender(t *testing.T) {
 	fs := buildFixture(t, `{"releases":[{"version":"1.0.0","released_on":"2024-01-15"}]}`,
 		map[string]string{

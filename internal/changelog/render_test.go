@@ -340,17 +340,52 @@ func TestRenderChange(t *testing.T) {
 		}))
 
 	// The body is nested under the bullet it belongs to.
-	assert.Equal(t, "* Add widgets\n  Some detail.\n",
+	assert.Equal(t, "* Add widgets\n\n  Some detail.\n",
 		renderOneChange(t, &changefile.Changefile{Title: "Add widgets", Body: "Some detail.\n"}))
 
 	// Everything at once, in order: marker, link, title, body.
-	assert.Equal(t, "* ⚠️ [#12](https://github.com/stripe/stripe-go/pull/12) Remove widgets\n  Some detail.\n",
+	assert.Equal(t, "* ⚠️ [#12](https://github.com/stripe/stripe-go/pull/12) Remove widgets\n\n  Some detail.\n",
 		renderOneChange(t, &changefile.Changefile{
 			Title:       "Remove widgets",
 			PRUrl:       "https://github.com/stripe/stripe-go/pull/12",
 			SemverLevel: changefile.SemverLevelMajor,
 			Body:        "Some detail.\n",
 		}))
+}
+
+// A body that is not a list is a block of its own, so it gets a blank line to break out
+// of the title's paragraph. A body that opens with a list does not need one, and going
+// without keeps the surrounding bullets tight.
+func TestRenderChangeBodySeparator(t *testing.T) {
+	render := func(body string) string {
+		return renderOneChange(t, &changefile.Changefile{Title: "Add widgets", Body: body})
+	}
+
+	for name, body := range map[string]string{
+		"prose":              "Some detail.",
+		"a table":            "| a | b |\n| --- | --- |",
+		"an indented block":  "    x := 1",
+		"a fence":            "```go\nx := 1\n```",
+		"a heading":          "## Detail",
+		"a blockquote":       "> Careful.",
+		"an ordered list":    "3. third\n4. fourth",
+		"an empty bullet":    "-\n- real",
+		"an indented bullet": "     - too deep to be a bullet here",
+	} {
+		assert.Contains(t, render(body), "* Add widgets\n\n  ", name)
+	}
+
+	// Bullets, and an ordered list numbered 1, follow the title directly.
+	for name, body := range map[string]string{
+		"a bullet":         "- outer\n  - inner",
+		"a star bullet":    "* outer",
+		"a plus bullet":    "+ outer",
+		"a 1. list":        "1. first\n2. second",
+		"a 1) list":        "1) first",
+		"an indented list": "   - outer",
+	} {
+		assert.NotContains(t, render(body), "\n\n", name)
+	}
 }
 
 func TestRenderReleaseBlock(t *testing.T) {

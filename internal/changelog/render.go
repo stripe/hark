@@ -53,13 +53,16 @@ var whitespaceRun = regexp.MustCompile(`\s+`)
 // prNumberRegex pulls the pull request number off the end of a PR URL.
 var prNumberRegex = regexp.MustCompile(`/(?:pull|issues)/(\d+)/?$`)
 
+// listItemStartRegex matches a list-item at the start of a line (with optional leading padding)
+var listItemStartRegex = regexp.MustCompile(`^ {0,3}(?:[-*+]|1[.)])[ \t]+\S`)
+
 // groups everything we need to render a release
 type releaseGroup struct {
 	Release *releases.Release
 	Changes []*changefile.Changefile
 	Intro   string
 	// PrevPinnedAPIVersion is the API version pinned by the release this one succeeded
-	// by version — see [releases.File.Predecessors], not the previous release by date.
+	// by version (see [releases.File.Predecessors]), not the previous release by date.
 	// It's used to decide if this release announces a change of API version;
 	// see [releaseGroup.pinnedAPINotice].
 	PrevPinnedAPIVersion string
@@ -392,11 +395,24 @@ func renderChange(w io.Writer, c *changefile.Changefile) error {
 	}
 
 	if body := indentBody(c.Body); body != "" {
+		if bodyNeedsBlankLine(c.Body) {
+			if _, err := fmt.Fprintln(w); err != nil {
+				return err
+			}
+		}
 		if _, err := fmt.Fprintf(w, "%s\n", body); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// bodyNeedsBlankLine reports whether a body has to be separated from the parent bullet (so it gets its own block)
+//
+// Everything besides a list item needs a blank line proceeding it
+func bodyNeedsBlankLine(body string) bool {
+	firstLine, _, _ := strings.Cut(strings.TrimLeft(body, "\n"), "\n")
+	return !listItemStartRegex.MatchString(firstLine)
 }
 
 // indentBody nests a change's body under its bullet by prefixing every non-blank
