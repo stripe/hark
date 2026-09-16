@@ -4,6 +4,7 @@ description: "Fail a pull request that adds a breaking changefile without touchi
 # Though the `.hark/migration-guides/` directory isn't read by `hark` directly, this seemed like the best home for this check.
 # Basically, if you write a breaking changefile, you should also edit a migration guide file
 # The openapi bot is exempt from this check, since it routinely adds breaking changes and the migration guide is covered elsewhere
+# Only pull requests into a branch that eventually hits `master` need a guide, since that's the only branch we release GA versions from
 
 runs:
   using: "composite"
@@ -14,6 +15,18 @@ runs:
         set -euo pipefail
 
         set -f
+        for branch in $GUARDED_BASE_BRANCHES; do
+          if [ "$BASE_BRANCH" = "$branch" ]; then
+            guarded=1
+            break
+          fi
+        done
+
+        if [ -z "${guarded:-}" ]; then
+          echo "${BASE_BRANCH} isn't a branch a major release is cut from; no migration guide needed."
+          exit 0
+        fi
+
         for exempt in $EXEMPT_AUTHORS; do
           if [ "$PR_AUTHOR" = "$exempt" ]; then
             echo "${PR_AUTHOR} is exempt from this check."
@@ -98,5 +111,8 @@ runs:
         PR_NUMBER: ${{ github.event.pull_request.number }}
         CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
         PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
         # Whitespace-separated logins
         EXEMPT_AUTHORS: "stripe-openapi[bot]"
+        # Whitespace-separated branch names; a pull request into anything else is exempt
+        GUARDED_BASE_BRANCHES: "master sdk-release/next-major"
