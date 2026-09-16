@@ -1,6 +1,10 @@
 # Changelog
 
-# 1.0.1
+## 1.1.0
+
+- add `hark inspect` command to read changefile frontmatter and output JSON for each supplied file.  this output currently contains the `path` and `semver_level`.
+
+## 1.0.1
 
 _released `2026-09-15`_
 
