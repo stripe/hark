@@ -263,6 +263,17 @@ func TestBuild_IntroLeadingWhitespaceIsTrimmed(t *testing.T) {
 	assert.Contains(t, build(t, fs), "## <a id=\"1-0-0\"></a>1.0.0 - 2024-01-15\nSome prose.\n\n* Shipped\n")
 }
 
+// Comments in an intro file are notes to whoever is drafting it, not changelog content.
+func TestBuild_IntroCommentsAreStripped(t *testing.T) {
+	fs := buildFixture(t, `{"releases":[{"version":"1.0.0","released_on":"2024-01-15"}]}`,
+		map[string]string{"a.change.md": "---\ntitle: \"Shipped\"\nreleased_in_version: \"1.0.0\"\n---\n"})
+	writeIntro(t, fs, "1.0.0", "<!-- link the migration guide once it's up -->\nSome prose.\n")
+
+	got := build(t, fs)
+	assert.Contains(t, got, "## <a id=\"1-0-0\"></a>1.0.0 - 2024-01-15\nSome prose.\n\n* Shipped\n")
+	assert.NotContains(t, got, "migration guide")
+}
+
 func TestBuild_SectionOrderIsCanonical(t *testing.T) {
 	fs := buildFixture(t, `{"releases":[{"version":"1.0.0","released_on":"2024-01-15"}]}`,
 		map[string]string{

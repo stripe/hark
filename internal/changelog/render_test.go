@@ -388,6 +388,55 @@ func TestRenderChangeBodySeparator(t *testing.T) {
 	}
 }
 
+func TestStripHTMLComments(t *testing.T) {
+	// Nothing to do, including for a body that only looks like it has a comment.
+	assert.Empty(t, stripHTMLComments(""))
+	assert.Equal(t, "Some detail.", stripHTMLComments("Some detail."))
+	assert.Equal(t, "a --> b", stripHTMLComments("a --> b"))
+
+	// A comment on its own line goes entirely, leaving no blank line behind it.
+	assert.Equal(t, "Some detail.", stripHTMLComments("<!-- a note -->\nSome detail."))
+	assert.Equal(t, "Some detail.\n", stripHTMLComments("Some detail.\n<!-- a note -->\n"))
+	assert.Empty(t, stripHTMLComments("<!-- the whole body -->"))
+	assert.Empty(t, stripHTMLComments("  <!-- indented -->\n"))
+
+	// Multi-line comments, and several of them.
+	assert.Equal(t, "Some detail.", stripHTMLComments("<!--\n a note\n over lines\n-->\nSome detail."))
+	assert.Equal(t, "Some detail.", stripHTMLComments("<!-- one -->\n\n<!-- two -->\nSome detail."))
+
+	// The paragraph break around a comment survives as exactly one blank line.
+	assert.Equal(t, "First.\n\nSecond.",
+		stripHTMLComments("First.\n\n<!-- a note -->\n\nSecond."))
+	assert.Equal(t, "First.\nSecond.", stripHTMLComments("First.\n<!-- a note -->\nSecond."))
+
+	// A comment beside content leaves the content, and takes the space ahead of it so it
+	// can't leave a two-space hard line break.
+	assert.Equal(t, "Some detail.", stripHTMLComments("Some detail. <!-- a note -->"))
+	assert.Equal(t, "Some detail.", stripHTMLComments("Some detail.  <!-- a note -->"))
+	assert.Equal(t, "- outer\n- second", stripHTMLComments("- outer <!-- a note -->\n- second"))
+
+	// An unterminated comment is left as written rather than swallowing the rest.
+	assert.Equal(t, "<!-- oops\nSome detail.", stripHTMLComments("<!-- oops\nSome detail."))
+}
+
+// A comment ahead of the body must not decide the body's separator: what matters is the
+// first line the reader will actually see.
+func TestRenderChangeCommentBeforeBody(t *testing.T) {
+	assert.Equal(t, "* Add widgets\n  - outer\n",
+		renderOneChange(t, &changefile.Changefile{
+			Title: "Add widgets", Body: "<!-- reviewers: is this clear? -->\n- outer",
+		}))
+
+	assert.Equal(t, "* Add widgets\n\n  Some detail.\n",
+		renderOneChange(t, &changefile.Changefile{
+			Title: "Add widgets", Body: "<!-- reviewers: is this clear? -->\nSome detail.",
+		}))
+
+	// A body that is nothing but a comment renders as a bare bullet.
+	assert.Equal(t, "* Add widgets\n",
+		renderOneChange(t, &changefile.Changefile{Title: "Add widgets", Body: "<!-- TODO: write this up -->"}))
+}
+
 func TestRenderReleaseBlock(t *testing.T) {
 	// An anchor we can deeplink to, ahead of a heading whose text includes the date.
 	assert.Equal(t, "## <a id=\"1-0-0\"></a>1.0.0 - 2026-01-15\n* Add widgets\n",
@@ -435,6 +484,28 @@ func TestRenderReleaseBlockSeparatesProseFromBullets(t *testing.T) {
 				aChange("a.change.md", "Add widgets"),
 				{Title: "Add more", SourcePath: "b.change.md", Section: "Added"},
 			},
+		}))
+}
+
+// An intro is hand-written too, so it gets the same comment stripping a body does.
+func TestRenderReleaseBlockStripsIntroComments(t *testing.T) {
+	release := &releases.Release{Version: "1.0.0", ReleasedOn: "2026-01-15"}
+	changes := []*changefile.Changefile{aChange("a.change.md", "Add widgets")}
+
+	assert.Equal(t, "## <a id=\"1-0-0\"></a>1.0.0 - 2026-01-15\nProse.\n\n* Add widgets\n",
+		renderBlock(t, releaseGroup{
+			Release: release,
+			Intro:   "<!-- TODO: mention the migration guide -->\nProse.\n",
+			Changes: changes,
+		}))
+
+	// An intro of nothing but a comment is no intro: the bullets follow the heading
+	// directly, as they would with no intro file at all.
+	assert.Equal(t, "## <a id=\"1-0-0\"></a>1.0.0 - 2026-01-15\n* Add widgets\n",
+		renderBlock(t, releaseGroup{
+			Release: release,
+			Intro:   "<!-- draft this before we cut 1.0.0 -->\n",
+			Changes: changes,
 		}))
 }
 

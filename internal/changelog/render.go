@@ -111,7 +111,7 @@ func versionAnchor(version string) string {
 }
 
 func (g releaseGroup) intro() string {
-	return strings.TrimSpace(g.Intro)
+	return strings.TrimSpace(stripHTMLComments(g.Intro))
 }
 
 // A section header and its changes. Changes without a `section` are stored in a struct with an empty `Section`.
@@ -394,8 +394,12 @@ func renderChange(w io.Writer, c *changefile.Changefile) error {
 		return err
 	}
 
-	if body := indentBody(c.Body); body != "" {
-		if bodyNeedsBlankLine(c.Body) {
+	// Comments are stripped before anything else looks at the body, so a leading comment
+	// doesn't decide whether the body needs a blank line ahead of it.
+	rawBody := stripHTMLComments(c.Body)
+
+	if body := indentBody(rawBody); body != "" {
+		if bodyNeedsBlankLine(rawBody) {
 			if _, err := fmt.Fprintln(w); err != nil {
 				return err
 			}
@@ -405,6 +409,32 @@ func renderChange(w io.Writer, c *changefile.Changefile) error {
 		}
 	}
 	return nil
+}
+
+// wholeLineHtmlCommentRegex matches an HTML comment occupying its own line (or lines),
+// together with the newline that ends it and any blank lines that follow. Taking the
+// blank lines is what keeps a comment between two paragraphs from leaving a double gap.
+var wholeLineHtmlCommentRegex = regexp.MustCompile(`(?ms)^[ \t]*<!--.*?-->[ \t]*(?:\r?\n(?:[ \t]*\r?\n)*|\z)`)
+
+// inlineHtmlCommentRegex matches an HTML comment with content beside it on the line, and
+// eats the whitespace ahead of it so trailing spaces can't be left behind as a hard
+// line break.
+var inlineHtmlCommentRegex = regexp.MustCompile(`(?s)[ \t]*<!--.*?-->`)
+
+// stripHTMLComments removes HTML comments from hand-written markdown so we can give instructions in changefiles without junking up the actual changelog
+//
+// This happens at render time rather than in [changefile.Parse] because `hark release`
+// rewrites changefiles in place, and a body parsed without its comments would lose them
+// on disk the first time the change shipped.
+//
+// An unterminated `<!--` is ignored alone: there's no comment to strip. A comment inside a fenced code block is stripped like any other.
+func stripHTMLComments(body string) string {
+	if !strings.Contains(body, "<!--") {
+		return body
+	}
+
+	body = wholeLineHtmlCommentRegex.ReplaceAllString(body, "")
+	return inlineHtmlCommentRegex.ReplaceAllString(body, "")
 }
 
 // bodyNeedsBlankLine reports whether a body has to be separated from the parent bullet (so it gets its own block)

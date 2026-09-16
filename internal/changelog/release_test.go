@@ -76,6 +76,25 @@ func TestRelease_StampsRecordsAndRebuilds(t *testing.T) {
 	assert.Contains(t, string(changelog), "## <a id=\"1-0-0\"></a>1.0.0 - 2026-09-09\n* Add widgets\n")
 }
 
+// A comment stays in the changefile that stamping rewrites, and stays out of the
+// changelog that stamping rebuilds.
+func TestRelease_KeepsCommentsInTheChangefileOnly(t *testing.T) {
+	fs, opts := releaseFixture(t, `{"releases":[]}`, map[string]string{
+		"2026-09-08_xavdid_add-widgets.change.md": "---\ntitle: \"Add widgets\"\n---\n\n" +
+			"<!-- reviewers: is this clear? -->\nSome detail.\n",
+	})
+
+	require.NoError(t, Release(context.Background(), opts, releases.Release{Version: "1.0.0"}))
+
+	cf := read(t, fs, changesFixtureDir+"/2026-09-08_xavdid_add-widgets.change.md")
+	assert.Equal(t, "<!-- reviewers: is this clear? -->\nSome detail.", cf.Body)
+
+	changelog, err := afero.ReadFile(fs, changelogPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(changelog), "* Add widgets\n\n  Some detail.\n")
+	assert.NotContains(t, string(changelog), "reviewers")
+}
+
 // Changes that already shipped belong to the release they shipped in.
 func TestRelease_LeavesAlreadyReleasedChangesAlone(t *testing.T) {
 	fs, opts := releaseFixture(t, `{"releases":[{"version":"1.0.0","released_on":"2026-01-15"}]}`,
