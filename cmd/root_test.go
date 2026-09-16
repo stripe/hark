@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"testing"
 
 	"github.com/spf13/afero"
@@ -29,6 +30,19 @@ func runFs(t *testing.T, fs afero.Fs, args ...string) (string, error) {
 
 	err := root.Execute()
 	return out.String(), err
+}
+
+func runFsStreams(t *testing.T, fs afero.Fs, args ...string) (stdout, stderr string, err error) {
+	t.Helper()
+
+	var out, errOut bytes.Buffer
+	root := newRootCmd("1.2.3", fs)
+	root.SetOut(&out)
+	root.SetErr(&errOut)
+	root.SetArgs(args)
+
+	err = root.Execute()
+	return out.String(), errOut.String(), err
 }
 
 // harkFs is a filesystem laid out the way hark expects, holding a releases file
@@ -59,9 +73,50 @@ func TestHelpListsAllCommands(t *testing.T) {
 	out, err := run(t, "--help")
 	require.NoError(t, err)
 
-	for _, name := range []string{"new", "release", "build", "validate"} {
+	for _, name := range []string{"new", "release", "build", "validate", "inspect"} {
 		assert.Contains(t, out, name)
 	}
+}
+
+func TestInspect(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	require.NoError(t, afero.WriteFile(fs, "first.change.md", []byte("---\ntitle: First\nsemver_level: major\n---\n"), 0o644))
+	require.NoError(t, afero.WriteFile(fs, "second.change.md", []byte("---\ntitle: Second\n---\n"), 0o644))
+
+	stdout, stderr, err := runFsStreams(t, fs, "inspect", "second.change.md", "first.change.md")
+	require.NoError(t, err)
+	assert.Empty(t, stderr)
+
+	var got []struct {
+		Path        string `json:"path"`
+		SemverLevel string `json:"semver_level"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	assert.Equal(t, []struct {
+		Path        string `json:"path"`
+		SemverLevel string `json:"semver_level"`
+	}{
+		{Path: "second.change.md", SemverLevel: "patch"},
+		{Path: "first.change.md", SemverLevel: "major"},
+	}, got)
+}
+
+func TestInspectRequiresArguments(t *testing.T) {
+	fs := afero.NewMemMapFs()
+
+	stdout, _, err := runFsStreams(t, fs, "inspect")
+	require.Error(t, err)
+	assert.Empty(t, stdout)
+}
+
+func TestInspectFailureWritesNoJSONAndNamesPath(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	require.NoError(t, afero.WriteFile(fs, "valid.change.md", []byte("---\ntitle: Valid\n---\n"), 0o644))
+
+	stdout, stderr, err := runFsStreams(t, fs, "inspect", "valid.change.md", "missing.change.md")
+	require.Error(t, err)
+	assert.Empty(t, stdout)
+	assert.Contains(t, stderr, "missing.change.md")
 }
 
 func TestUnknownCommand(t *testing.T) {

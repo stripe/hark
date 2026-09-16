@@ -51,6 +51,7 @@ func newRootCmd(version string, fs afero.Fs) *cobra.Command {
 		newReleaseCmd(g),
 		newBuildCmd(g),
 		newValidateCmd(g),
+		newInspectCmd(g),
 	)
 
 	return root
