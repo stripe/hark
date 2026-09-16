@@ -277,9 +277,55 @@ func TestNew_UsesAnExplicitSlug(t *testing.T) {
 	assert.NotContains(t, out.String(), "rename it")
 }
 
+// An explicit date leads the filename in place of today's, for a change written on one
+// day and filed on another.
+func TestNew_UsesAnExplicitDate(t *testing.T) {
+	_, _, opts := newFixture(t)
+
+	path, err := newChange(t, opts,
+		changefile.Changefile{Title: "Add widgets"},
+		NewOptions{Slug: "add-widgets", Date: "2026-08-01"})
+	require.NoError(t, err)
+
+	assert.Equal(t, ".hark/changes/2026-08-01_xavdid_add-widgets.change.md", path)
+	assert.Empty(t, changefile.ValidateName(path))
+}
+
+// Without one, the date is today's, read from the same clock everything else uses.
+func TestNew_DefaultsTheDateToToday(t *testing.T) {
+	_, _, opts := newFixture(t)
+
+	path, err := newChange(t, opts,
+		changefile.Changefile{Title: "Add widgets"}, NewOptions{Slug: "add-widgets"})
+	require.NoError(t, err)
+
+	assert.Equal(t, ".hark/changes/2026-09-09_xavdid_add-widgets.change.md", path)
+}
+
+// The date is what the changelog sorts changes by, so a name it can't sort is refused
+// rather than written and left for a reader to puzzle over.
+func TestNew_RefusesAnUnusableDate(t *testing.T) {
+	for _, date := range []string{"2026-13-45", "2026-9-9", "09-09-2026", "yesterday", "2026-09-09/../other"} {
+		t.Run(date, func(t *testing.T) {
+			fs, _, opts := newFixture(t)
+
+			_, err := newChange(t, opts,
+				changefile.Changefile{Title: "Add widgets"},
+				NewOptions{Slug: "add-widgets", Date: date})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "ISO date")
+
+			exists, err := afero.DirExists(fs, changesFixtureDir)
+			require.NoError(t, err)
+			assert.False(t, exists, "wrote something before rejecting the date")
+		})
+	}
+}
+
 // A slug is one segment of a filename, so anything with a separator in it would land
 // somewhere other than where the name says (including outside .hark/changes entirely,
-// where nothing would ever read it).
+// where nothing would ever read it). The charset rule is what catches these now, before
+// the name is ever joined to a directory.
 func TestNew_RefusesASlugWithPathSeparators(t *testing.T) {
 	for _, slug := range []string{"a/b", "../other", "/../../other", "nested/dir/change", "../"} {
 		t.Run(slug, func(t *testing.T) {
@@ -288,7 +334,7 @@ func TestNew_RefusesASlugWithPathSeparators(t *testing.T) {
 			_, err := newChange(t, opts,
 				changefile.Changefile{Title: "Add widgets"}, NewOptions{Slug: slug})
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), "path separators")
+			assert.Contains(t, err.Error(), "letters, numbers, and hyphens")
 
 			// Nothing was written, in .hark/changes or anywhere above it.
 			for _, dir := range []string{changesFixtureDir, ".hark", ".", ".."} {
@@ -302,6 +348,40 @@ func TestNew_RefusesASlugWithPathSeparators(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The slug goes straight into a filename, so it's held to the same charset the name is:
+// caught here, while the author is still at the terminal, rather than by CI later.
+func TestNew_RefusesAnUnusableSlug(t *testing.T) {
+	for _, slug := range []string{"add widgets", "add_widgets", "add.widgets", "add!"} {
+		t.Run(slug, func(t *testing.T) {
+			fs, _, opts := newFixture(t)
+
+			_, err := newChange(t, opts,
+				changefile.Changefile{Title: "Add widgets"}, NewOptions{Slug: slug})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "letters, numbers, and hyphens")
+
+			exists, err := afero.DirExists(fs, changesFixtureDir)
+			require.NoError(t, err)
+			assert.False(t, exists, "wrote something before rejecting the slug")
+		})
+	}
+}
+
+// Rejecting a bad slug happens before the pull request lookup, since a name that can't
+// be written makes anything the lookup found moot.
+func TestNew_RefusesAnUnusableSlugBeforeLookingUpThePR(t *testing.T) {
+	_, out, opts := newFixture(t)
+
+	// a draft with no title or URL is what would otherwise send New to the finder
+	_, err := newChange(t, opts, changefile.Changefile{},
+		NewOptions{Slug: "add widgets", PRs: fakeFinder{err: errors.New("gh is unavailable")}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "letters, numbers, and hyphens")
+
+	// the finder reports failure by printing, so silence means it was never consulted
+	assert.Empty(t, out.String())
 }
 
 // A user, which automation passes and the shell otherwise supplies, is a segment of the

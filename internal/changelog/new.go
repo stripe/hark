@@ -19,6 +19,8 @@ const placeholderTitle = changefile.FixmeSlug + ": describe this change"
 type NewOptions struct {
 	// the short phrase in the filename, used for uniqueness and searchability. The default fails in [Validate] so it's replaced with something good.
 	Slug string
+	// the date in the filename, in [changefile.DateFormat]. Defaults to today.
+	Date string
 	// used by the auto PRs because they write the diff to disk before use
 	BodyPath string
 	// who to attribute the change to. Defaults to the current user. Automation should pass it explicitly, since $USER isn't useful in CI
@@ -45,6 +47,17 @@ func (n NewOptions) withDefaults() NewOptions {
 func New(ctx context.Context, opts Options, draft changefile.Changefile, newOpts NewOptions) (string, error) {
 	opts = opts.withDefaults()
 	newOpts = newOpts.withDefaults()
+
+	if newOpts.Slug != "" {
+		if err := changefile.ValidateSlug(newOpts.Slug); err != nil {
+			return "", err
+		}
+	}
+	if newOpts.Date != "" {
+		if err := changefile.ValidateDate(newOpts.Date); err != nil {
+			return "", err
+		}
+	}
 
 	// Only call out to `gh` if it could fill in information we don't already have
 	if draft.Title == "" || draft.PRUrl == "" {
@@ -86,13 +99,17 @@ func New(ctx context.Context, opts Options, draft changefile.Changefile, newOpts
 	if slug == "" {
 		slug, defaulted.slug = changefile.FixmeSlug, true
 	}
+	date := newOpts.Date
+	if date == "" {
+		date = opts.today()
+	}
 
 	dir := opts.changesDir()
 	if err := opts.Fs.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("creating %s: %w", dir, err)
 	}
 
-	path, err := newPath(opts, dir, opts.today(), user, slug)
+	path, err := newPath(opts, dir, date, user, slug)
 	if err != nil {
 		return "", err
 	}

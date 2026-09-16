@@ -17,13 +17,14 @@ func newNewCmd(g *globalFlags) *cobra.Command {
 		draft    changefile.Changefile
 		bodyFile string
 		user     string
+		date     string
 	)
 
 	cmd := &cobra.Command{
 		Use:   "new [SLUG]",
 		Short: "Create a new changefile",
 		Long: "Create a new changefile.\n\n" +
-			"Any fields not present have sensible defaults (that may not pass verification).\n\nSLUG is the short phrase that goes in the filename. Leave it out and the file is named FIXME, which `hark validate` rejects until you rename it.",
+			"Any fields not present have sensible defaults (that may not pass verification).\n\nSLUG is the short phrase that goes in the filename; it may only contain letters, numbers, and hyphens. Leave it out and the file is named FIXME, which `hark validate` rejects until you rename it.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: runE(func(cmd *cobra.Command, args []string) error {
 			if draft.Body != "" && bodyFile != "" {
@@ -35,7 +36,7 @@ func newNewCmd(g *globalFlags) *cobra.Command {
 					strings.Join(changefile.SemverLevels, ", "))
 			}
 
-			newOpts := changelog.NewOptions{BodyPath: bodyFile, User: user}
+			newOpts := changelog.NewOptions{BodyPath: bodyFile, User: user, Date: date}
 			if len(args) > 0 {
 				newOpts.Slug = args[0]
 			}
@@ -59,6 +60,8 @@ func newNewCmd(g *globalFlags) *cobra.Command {
 	f.StringVar(&draft.Body, "body", "", "markdown to nest under the changelog bullet. Mutually exclusive with --body-file")
 	f.StringVar(&bodyFile, "body-file", "", "file to read the body from.  Mutually exclusive with --body")
 	f.StringVar(&user, "user", "", "who to attribute the change to (defaults to $USER)")
+	f.StringVar(&date, "date", "",
+		"the date the filename leads with, like "+changefile.DateFormat+" (defaults to today). Changes are listed in the changelog in this order")
 
 	return cmd
 }

@@ -44,7 +44,9 @@ so intros can be drafted ahead of the release.
 Changefile names (`{date}_{user}_{slug}.change.md`, where `{date}` is `YYYY-MM-DD`)
 must lead with the date: the changelog orders changes within a release by filename,
 oldest first — except that a change marked `is_stripe_api_change` sorts last whatever
-it is named. Release dates in `releases.json` use that same format.
+it is named. Release dates in `releases.json` use that same format. The `{slug}` is
+letters, numbers, and hyphens only (`changefile.ValidateSlug`) — an underscore in it
+would read as a fourth segment, and a space makes the file a chore to type.
 
 How big a change is lives in one field, `semver_level`. A changefile that leaves it
 off is a patch, so read it through `Changefile.Level()` rather than the field: `major`

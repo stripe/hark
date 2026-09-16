@@ -212,6 +212,26 @@ func TestNewRejectsAnUnknownSemverLevel(t *testing.T) {
 	assert.Contains(t, err.Error(), "major, minor, patch")
 }
 
+// --date leads the filename, so the file it wrote is the assertion.
+func TestNewWritesTheGivenDate(t *testing.T) {
+	fs := harkFs(t)
+
+	out, err := runFs(t, fs, "new", "add-widgets", "--title", "Add widgets", "--date", "2026-08-01")
+	require.NoError(t, err)
+	assert.Contains(t, out, "2026-08-01_")
+
+	// the user segment is whoever runs the tests, so it stays a wildcard
+	paths, err := afero.Glob(fs, ".hark/changes/2026-08-01_*_add-widgets.change.md")
+	require.NoError(t, err)
+	assert.Len(t, paths, 1)
+}
+
+func TestNewRejectsAnUnusableDate(t *testing.T) {
+	_, err := run(t, "new", "add-widgets", "--title", "Add widgets", "--date", "8/1/2026")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ISO date")
+}
+
 func TestNewRejectsExtraArgs(t *testing.T) {
 	_, err := run(t, "new", "add-widgets", "unexpected")
 	require.Error(t, err)

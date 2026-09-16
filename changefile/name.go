@@ -3,6 +3,7 @@ package changefile
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -24,9 +25,27 @@ const (
 	FixmeSlug = "FIXME"
 )
 
+// slugs should be alphanumeric and can't contain underscores (since those are our file separator)
+var slugRegex = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
+
 // Build a full filename based on component segments.
 func Name(date, user, slug string) string {
 	return strings.Join([]string{date, user, slug}, NameSep) + Extension
+}
+
+func ValidateSlug(slug string) error {
+	if !slugRegex.MatchString(slug) {
+		return fmt.Errorf("slug %q may only contain letters, numbers, and hyphens", slug)
+	}
+	return nil
+}
+
+func ValidateDate(date string) error {
+	parsed, err := time.Parse(DateFormat, date)
+	if err != nil || parsed.Format(DateFormat) != date {
+		return fmt.Errorf("date %q should be an ISO date, like %s", date, DateFormat)
+	}
+	return nil
 }
 
 // validates the structure of a filename.
@@ -51,12 +70,17 @@ func ValidateName(path string) []error {
 		return errs
 	}
 
-	if _, err := time.Parse(DateFormat, parts[0]); err != nil {
+	if err := ValidateDate(parts[0]); err != nil {
 		errs = append(errs, fmt.Errorf("name should lead with an ISO date, like %s; got %q", DateFormat, parts[0]))
 	}
 
-	if slug := strings.Join(parts[2:], NameSep); slug == FixmeSlug ||
-		strings.HasPrefix(slug, FixmeSlug+NameSep) {
+	// everything past the user is the slug, so an underscore in it shows up here as extra segments
+	slug := strings.Join(parts[2:], NameSep)
+	if err := ValidateSlug(slug); err != nil {
+		errs = append(errs, err)
+	}
+
+	if slug == FixmeSlug || strings.HasPrefix(slug, FixmeSlug+NameSep) {
 		errs = append(errs, fmt.Errorf("changefile named %q still has the %s placeholder; rename it to a slug that represents the change",
 			name, FixmeSlug))
 	}
