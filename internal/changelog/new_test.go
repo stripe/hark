@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -482,16 +483,32 @@ func TestNew_DateIsLocal(t *testing.T) {
 	assert.Contains(t, path, "2026-09-09_")
 }
 
-// A changefile starts with no body: the author writes the explanation. Seeding it
-// with boilerplate would put that boilerplate in the changelog.
-func TestNew_LeavesTheBodyEmpty(t *testing.T) {
+// A changefile with nothing to describe the change yet gets a prompt for the author.
+func TestNew_SeedsTheBodyWithAPrompt(t *testing.T) {
 	fs, _, opts := newFixture(t)
 
 	path, err := newChange(t, opts,
 		changefile.Changefile{Title: "Add widgets"}, NewOptions{})
 	require.NoError(t, err)
 
-	assert.Empty(t, read(t, fs, path).Body)
+	assert.Equal(t, bodyTemplate, read(t, fs, path).Body)
+}
+
+// The prompt has to be nothing but a comment, whatever it says, so an author who never
+// fills it in doesn't publish it. This is what the wording is free to change under.
+func TestNew_BodyTemplateIsEntirelyAComment(t *testing.T) {
+	assert.Empty(t, strings.TrimSpace(stripHTMLComments(bodyTemplate)))
+}
+
+// A body that was supplied is the explanation; the prompt would only be in the way.
+func TestNew_LeavesASuppliedBodyAlone(t *testing.T) {
+	fs, _, opts := newFixture(t)
+
+	path, err := newChange(t, opts,
+		changefile.Changefile{Title: "Add widgets", Body: "Some detail."}, NewOptions{})
+	require.NoError(t, err)
+
+	assert.Equal(t, "Some detail.", read(t, fs, path).Body)
 }
 
 func TestJiraTags(t *testing.T) {

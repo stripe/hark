@@ -15,6 +15,18 @@ import (
 // the title written when the author gave nothing to use as one. Deliberately fails [Validate] so all of our changes are well-named.
 const placeholderTitle = changefile.FixmeSlug + ": describe this change"
 
+// bodyTemplate prompts the author for the detail that goes under their changelog bullet.
+//
+// It has to be entirely an HTML comment so it's removed during render.
+const bodyTemplate = `<!--
+If you need to add more detail beyond what your changefile title conveys, put it here! This section is optional- sometimes, the PR title & link are enough.
+Anything in this file will be added below the root bullet holding your PR link & changefile's title.
+Content can be a markdown list or arbitrary prose.
+The header of semver-major changes will get a ⚠️ prepended, so use it sparingly (unless there are _specific_ lines you need to call out).
+Either way, be specific and remember to focus on user-facing impact (which may only be a small subset of the work you did). e.g.:
+- resolves errors when calling "client.v1.flux_capacitor.create()" with a stripe_account param
+- adjusts imports, resulting in 23 percent faster build times -->`
+
 // Options for seeding new changefiles
 type NewOptions struct {
 	// the short phrase in the filename, used for uniqueness and searchability. The default fails in [Validate] so it's replaced with something good.
@@ -90,6 +102,12 @@ func New(ctx context.Context, opts Options, draft changefile.Changefile, newOpts
 			return "", fmt.Errorf("reading %s: %w", newOpts.BodyPath, err)
 		}
 		draft.Body = strings.TrimSpace(string(data))
+	}
+
+	// A body the author (or automation) already supplied is the explanation, so the prompt
+	// would only be in the way. It's seeded when there's nothing to describe the change yet.
+	if draft.Body == "" {
+		draft.Body = bodyTemplate
 	}
 
 	if draft.Title == "" {
