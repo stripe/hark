@@ -17,6 +17,25 @@ We already depend on `hark` via `mise`. Run `mise install` once you've completed
 
 Each user-facing PR needs a corresponding `.change.md` file. Create one by running `hark new` in your local branch. It will auto-populate as much information as it can (including your PR information, if one has already been created). If any fields need manual correction, `hark new` will warn you. Ensure your changefile is structurally valid before pushing by running `hark validate` (or CI will fail).
 
+### Inspecting changefile semver levels
+
+Automation can inspect explicitly selected changefiles with Hark's own front-matter parser:
+
+```sh
+hark inspect --format json .hark/changes/example.change.md
+```
+
+The command writes a JSON array to stdout, in the same order as its path arguments. Each item has the schema `{"path":"<caller-supplied path>","semver_level":"major|minor|patch"}`. `semver_level` is effective rather than raw: a changefile that omits it is reported as `patch`.
+
+The command does not scan the repository or validate other changefiles. If any requested path is missing, unreadable, or has invalid front matter, it writes a diagnostic to stderr, exits nonzero, and emits no JSON.
+
+For example, CI can gate a workflow on explicitly selected breaking changes:
+
+```sh
+changefiles=(.hark/changes/example.change.md .hark/changes/another.change.md)
+hark inspect --format json "${changefiles[@]}" | jq -e '.[] | select(.semver_level == "major")'
+```
+
 ### Releasing versions
 
 `hark release VERSION` adds a new entry to `releases.json` and populates information (e.g. pinned api version)
