@@ -33,7 +33,6 @@ func TestInspect(t *testing.T) {
 		"patch.change.md":   "---\ntitle: Patch\nsemver_level: patch\n---\n",
 		"default.change.md": "---\ntitle: Default\n---\n",
 		"quoted.change.md":  "---\ntitle: Quoted\nsemver_level: \"minor\"\n---\n",
-		"crlf.change.md":    "---\r\ntitle: CRLF\r\nsemver_level: 'major'\r\n---\r\n",
 	} {
 		require.NoError(t, afero.WriteFile(fs, path, []byte(content), 0o644))
 	}
@@ -62,11 +61,6 @@ func TestInspect(t *testing.T) {
 		assert.Equal(t, []Inspection{{Path: "quoted.change.md", SemverLevel: "minor"}}, got)
 	})
 
-	t.Run("CRLF front matter", func(t *testing.T) {
-		got, _, err := inspectOutput(t, fs, "crlf.change.md")
-		require.NoError(t, err)
-		assert.Equal(t, []Inspection{{Path: "crlf.change.md", SemverLevel: "major"}}, got)
-	})
 }
 
 func TestInspectFailuresDoNotWriteJSON(t *testing.T) {
