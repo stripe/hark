@@ -543,15 +543,29 @@ func TestRelease_SeedsTheNextMajorsMigrationGuide(t *testing.T) {
 
 	guide, err := afero.ReadFile(fs, guidePath(3))
 	require.NoError(t, err)
-	assert.NotEmpty(t, guide)
+
+	// It opens with a title naming the major it covers, so a reader who found the file on
+	// its own knows which upgrade it is about. The rest is the instructions for writing it.
+	firstLine, rest, _ := strings.Cut(string(guide), "\n")
+	assert.True(t, strings.HasPrefix(firstLine, "# "), "leads with an h1, got %q", firstLine)
+	assert.Contains(t, firstLine, "v3")
+	assert.NotEmpty(t, strings.TrimSpace(rest))
 
 	// The author is told where it went, since nothing else in hark reads the directory.
 	assert.Contains(t, opts.Out.(*bytes.Buffer).String(), guidePath(3))
 }
 
-// The seeded guide is a placeholder, so it can't be publishing anything on its own.
-func TestRelease_MigrationGuideTemplateIsEntirelyAComment(t *testing.T) {
-	assert.Empty(t, strings.TrimSpace(stripHTMLComments(migrationGuideTemplate)))
+// The major in the title is the one the file is named for, not the one just released.
+func TestRelease_MigrationGuideTitleMatchesItsName(t *testing.T) {
+	fs, opts := releaseFixture(t, `{"releases":[]}`,
+		map[string]string{"2026-09-08_xavdid_add-widgets.change.md": pendingChangefile})
+
+	require.NoError(t, Release(context.Background(), opts, releases.Release{Version: "9.0.1"}))
+
+	guide, err := afero.ReadFile(fs, guidePath(10))
+	require.NoError(t, err)
+	assert.Contains(t, string(guide), "v10")
+	assert.NotContains(t, string(guide), "v9")
 }
 
 // Whatever is in the guide already is someone's work in progress, and every release after

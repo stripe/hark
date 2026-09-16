@@ -97,11 +97,16 @@ func Release(ctx context.Context, opts Options, release releases.Release) error 
 	return Build(ctx, opts)
 }
 
-const migrationGuideTemplate = `<!-- This is the migration guide for the next major version!
+const migrationGuideTemplate = `# Migration guide for v%d
+
+v%d of the SDK bumps the API version to ` + "`TKTK`" + `. See the API changelog for more information: TKTK
+
+<!-- This is the migration guide for the next major version!
 If you're making breaking changes, add a new h2 header with a nice title and write a detailed guide to help users upgrade.
 You will almost certainly need before/after code examples and information about which users this change affects.
-See: https://github.com/stripe/hark#writing-a-great-changelog
--->\n`
+See: https://github.com/stripe/hark#writing-a-great-migration-guide
+-->
+`
 
 // in general, we always want the next migration guide available, so we create it proactively when we're making releases
 func seedNextMigrationGuide(opts Options, version string) error {
@@ -111,7 +116,8 @@ func seedNextMigrationGuide(opts Options, version string) error {
 	}
 
 	major, _ := releases.Major(version)
-	path := opts.migrationGuidePath(major + 1)
+	next := major + 1
+	path := opts.migrationGuidePath(next)
 
 	exists, err := afero.Exists(opts.Fs, path)
 	if err != nil {
@@ -125,11 +131,12 @@ func seedNextMigrationGuide(opts Options, version string) error {
 	if err := opts.Fs.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("creating %s: %w", dir, err)
 	}
-	if err := afero.WriteFile(opts.Fs, path, []byte(migrationGuideTemplate), 0644); err != nil {
+	guide := fmt.Sprintf(migrationGuideTemplate, next, next)
+	if err := afero.WriteFile(opts.Fs, path, []byte(guide), 0644); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
 
-	_, err = fmt.Fprintf(opts.Out, "practively seeded the %s migration guide\n", path)
+	_, err = fmt.Fprintf(opts.Out, "proactively seeded the %s migration guide\n", path)
 	return err
 }
 
