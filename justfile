@@ -1,4 +1,5 @@
 set quiet
+set no-exit-message
 
 export PATH := home_directory() + "/go/bin:" + env('PATH')
 
@@ -52,6 +53,8 @@ dev *args:
 [confirm("This will tag the latest commit and push that tag, kicking off the release workflow. Proceed (y/N)?")]
 release version:
     {{ assert(version =~ "^\\d+\\.\\d+\\.\\d+$", "call this with a semver version, got \"" + version + "\"") }}
+
+    {{ assert(`grep -c -i -E '^#+ *\[?unreleased' CHANGELOG.md || true` == "0", "CHANGELOG.md still has an Unreleased heading; retitle it to " + version + " first") }}
 
     {{ assert(`git status --porcelain` == "", "working tree is dirty; commit or stash first") }}
 
