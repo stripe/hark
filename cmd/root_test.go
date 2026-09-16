@@ -83,7 +83,7 @@ func TestInspect(t *testing.T) {
 	require.NoError(t, afero.WriteFile(fs, "first.change.md", []byte("---\ntitle: First\nsemver_level: major\n---\n"), 0o644))
 	require.NoError(t, afero.WriteFile(fs, "second.change.md", []byte("---\ntitle: Second\n---\n"), 0o644))
 
-	stdout, stderr, err := runFsStreams(t, fs, "inspect", "--format", "json", "second.change.md", "first.change.md")
+	stdout, stderr, err := runFsStreams(t, fs, "inspect", "second.change.md", "first.change.md")
 	require.NoError(t, err)
 	assert.Empty(t, stderr)
 
@@ -101,26 +101,19 @@ func TestInspect(t *testing.T) {
 	}, got)
 }
 
-func TestInspectRequiresArgumentsAndJSONFormat(t *testing.T) {
+func TestInspectRequiresArguments(t *testing.T) {
 	fs := afero.NewMemMapFs()
-	require.NoError(t, afero.WriteFile(fs, "example.change.md", []byte("---\ntitle: Example\n---\n"), 0o644))
 
-	for _, args := range [][]string{
-		{"inspect", "--format", "json"},
-		{"inspect", "example.change.md"},
-		{"inspect", "--format", "text", "example.change.md"},
-	} {
-		stdout, _, err := runFsStreams(t, fs, args...)
-		require.Error(t, err, "%v should fail", args)
-		assert.Empty(t, stdout)
-	}
+	stdout, _, err := runFsStreams(t, fs, "inspect")
+	require.Error(t, err)
+	assert.Empty(t, stdout)
 }
 
 func TestInspectFailureWritesNoJSONAndNamesPath(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	require.NoError(t, afero.WriteFile(fs, "valid.change.md", []byte("---\ntitle: Valid\n---\n"), 0o644))
 
-	stdout, stderr, err := runFsStreams(t, fs, "inspect", "--format", "json", "valid.change.md", "missing.change.md")
+	stdout, stderr, err := runFsStreams(t, fs, "inspect", "valid.change.md", "missing.change.md")
 	require.Error(t, err)
 	assert.Empty(t, stdout)
 	assert.Contains(t, stderr, "missing.change.md")

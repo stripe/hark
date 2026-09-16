@@ -22,7 +22,7 @@ Each user-facing PR needs a corresponding `.change.md` file. Create one by runni
 Automation can inspect explicitly selected changefiles with Hark's own front-matter parser:
 
 ```sh
-hark inspect --format json .hark/changes/example.change.md
+hark inspect .hark/changes/example.change.md
 ```
 
 The command writes a JSON array to stdout, in the same order as its path arguments. Each item has the schema `{"path":"<caller-supplied path>","semver_level":"major|minor|patch"}`. `semver_level` is effective rather than raw: a changefile that omits it is reported as `patch`.
@@ -33,7 +33,7 @@ For example, CI can gate a workflow on explicitly selected breaking changes:
 
 ```sh
 changefiles=(.hark/changes/example.change.md .hark/changes/another.change.md)
-hark inspect --format json "${changefiles[@]}" | jq -e '.[] | select(.semver_level == "major")'
+hark inspect "${changefiles[@]}" | jq -e '.[] | select(.semver_level == "major")'
 ```
 
 ### Releasing versions
