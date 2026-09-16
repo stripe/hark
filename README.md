@@ -51,14 +51,17 @@ stripe-<lang>/
 │   │   ├── 2026-01-22_xavdid_some-thing.change.md
 │   │   ├── 2026-03-22_xavdid_an-upcoming-feature.change.md
 │   │   └── 2026-06-22_xavdid_neato.change.md
-│   └── intros/
-│       └── intro-1.2.3.md
+│   ├── intros/
+│   │   └── intro-1.2.3.md
+│   └── migration-guides/
+│       └── v2.md
 └── CHANGELOG.md
 ```
 
 - `releases.json` is a manifest of all of the released versions of an SDK, including the date, its pinned API version (if any) and minimum supported language version
 - `changefiles` are little markdown fragments w/ metadata describing a user-facing change to an SDK. They have the extension `.change.md`
 - `intro-<VERSION>.md` is a bit of prose that goes after a version header but before any changes are listed. It's a good place to make announcements, summarize/highlight features, or anything else!
+- `v<MAJOR>.md` holds the upgrade instructions for a major version. `hark` never reads these, but it seeds the next one every time you cut a GA release, so there's always a file waiting for the next breaking change (see [writing a great migration guide](#writing-a-great-migration-guide))
 
 ### Go modules
 

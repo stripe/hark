@@ -49,6 +49,16 @@ func Channel(version string) (channel string, ok bool) {
 	}
 }
 
+// parse out a version's leading component. `ok` is false for a version that [IsVersionValid] rejects.
+func Major(version string) (major int, ok bool) {
+	if !IsVersionValid(version) {
+		return 0, false
+	}
+
+	nums, _, _ := splitRelease(version)
+	return nums[0], true
+}
+
 // compare two version strings for sorting. Each component is compared numerically. Invalid versions are sorted to the bottom.
 func Compare(a, b string) int {
 	switch aValid, bValid := IsVersionValid(a), IsVersionValid(b); {

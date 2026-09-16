@@ -88,7 +88,49 @@ func Release(ctx context.Context, opts Options, release releases.Release) error 
 		return err
 	}
 
+	if seedErr := seedNextMigrationGuide(opts, entry.Version); seedErr != nil {
+		if _, err := fmt.Fprintf(opts.Out, "warning: failed to proactively create the next migration guide (%v); you can safely ignore this. The release was not affected\n", seedErr); err != nil {
+			return err
+		}
+	}
+
 	return Build(ctx, opts)
+}
+
+const migrationGuideTemplate = `<!-- This is the migration guide for the next major version!
+If you're making breaking changes, add a new h2 header with a nice title and write a detailed guide to help users upgrade.
+You will almost certainly need before/after code examples and information about which users this change affects.
+See: https://github.com/stripe/hark#writing-a-great-changelog
+-->\n`
+
+// in general, we always want the next migration guide available, so we create it proactively when we're making releases
+func seedNextMigrationGuide(opts Options, version string) error {
+	// only write a new migration guides for GA
+	if channel, _ := releases.Channel(version); channel != releases.ChannelGA {
+		return nil
+	}
+
+	major, _ := releases.Major(version)
+	path := opts.migrationGuidePath(major + 1)
+
+	exists, err := afero.Exists(opts.Fs, path)
+	if err != nil {
+		return fmt.Errorf("checking %s: %w", path, err)
+	}
+	if exists {
+		return nil
+	}
+
+	dir := opts.migrationGuidesDir()
+	if err := opts.Fs.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("creating %s: %w", dir, err)
+	}
+	if err := afero.WriteFile(opts.Fs, path, []byte(migrationGuideTemplate), 0644); err != nil {
+		return fmt.Errorf("writing %s: %w", path, err)
+	}
+
+	_, err = fmt.Fprintf(opts.Out, "practively seeded the %s migration guide\n", path)
+	return err
 }
 
 // reportIntro says whether this release has an introduction, and where one would
@@ -104,7 +146,7 @@ func reportIntro(opts Options, version string) error {
 	if exists {
 		_, err = fmt.Fprintf(opts.Out, "using intro %s\n", path)
 	} else {
-		_, err = fmt.Fprintf(opts.Out, "no intro found. Write one in %s and run `hark build` if you want it to be included in the changelog.\n", path)
+		_, err = fmt.Fprintf(opts.Out, "there's not an intro for this release. If you want one, write it in %s and run `hark build`.\n", path)
 	}
 	return err
 }

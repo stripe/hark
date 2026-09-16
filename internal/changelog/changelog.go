@@ -10,12 +10,15 @@
 //	│   │   ├── 2026-01-22_xavdid_some-thing.md
 //	│   │   ├── 2026-03-22_xavdid_an-upcoming-feature.md
 //	│   │   └── 2026-06-22_xavdid_neato.md
-//	│   └── intros/
-//	│       └── intro-1.2.3.md
+//	│   ├── intros/
+//	│   │   └── intro-1.2.3.md
+//	│   └── migration-guides/
+//	│       └── v2.md
 //	└── CHANGELOG.md
 package changelog
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -29,11 +32,12 @@ import (
 )
 
 const (
-	HarkDir      = ".hark"
-	ChangesDir   = "changes"
-	IntrosDir    = "intros"
-	ReleasesName = "releases.json"
-	Filename     = "CHANGELOG.md"
+	HarkDir            = ".hark"
+	ChangesDir         = "changes"
+	IntrosDir          = "intros"
+	ReleasesName       = "releases.json"
+	Filename           = "CHANGELOG.md"
+	MigrationGuidesDir = "migration-guides"
 
 	// where to look for our filesystem structure. Repo root for the CLI, but a subfolder when we're working internal to Stripe
 	DefaultRoot = "."
@@ -97,6 +101,23 @@ func (o Options) introsDir() string {
 // introPath is where a release's introduction lives, whether or not it is there.
 func (o Options) introPath(version string) string {
 	return filepath.Join(o.introsDir(), IntroName(version))
+}
+
+// MigrationGuideName is the file holding the upgrade instructions for a major version.
+// One guide covers a whole major, so it is named for the major alone rather than for the
+// release that introduced it.
+func MigrationGuideName(major int) string {
+	return fmt.Sprintf("v%d.md", major)
+}
+
+// migrationGuidesDir is the directory holding this repo's migration guides.
+func (o Options) migrationGuidesDir() string {
+	return filepath.Join(o.Root, HarkDir, MigrationGuidesDir)
+}
+
+// migrationGuidePath is where a major version's migration guide lives (though the path may be empty)
+func (o Options) migrationGuidePath(major int) string {
+	return filepath.Join(o.migrationGuidesDir(), MigrationGuideName(major))
 }
 
 // releasesPath is this repo's releases file.

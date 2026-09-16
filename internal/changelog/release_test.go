@@ -3,6 +3,8 @@ package changelog
 import (
 	"bytes"
 	"context"
+	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -524,4 +526,97 @@ func TestRelease_AcceptsTheSpellingAlreadyRecorded(t *testing.T) {
 	assert.Equal(t, "1.0.0b1", recorded[0].Version)
 	assert.Equal(t, "1.0.0b1",
 		read(t, fs, changesFixtureDir+"/2026-09-08_xavdid_add-widgets.change.md").ReleasedInVersion)
+}
+
+// guidePath is where the migration guide for a major version would be.
+func guidePath(major int) string {
+	return HarkDir + "/" + MigrationGuidesDir + "/" + MigrationGuideName(major)
+}
+
+// So there's always a file to write the next breaking change into, releasing a version
+// opens the guide for the major after it.
+func TestRelease_SeedsTheNextMajorsMigrationGuide(t *testing.T) {
+	fs, opts := releaseFixture(t, `{"releases":[]}`,
+		map[string]string{"2026-09-08_xavdid_add-widgets.change.md": pendingChangefile})
+
+	require.NoError(t, Release(context.Background(), opts, releases.Release{Version: "2.3.4"}))
+
+	guide, err := afero.ReadFile(fs, guidePath(3))
+	require.NoError(t, err)
+	assert.NotEmpty(t, guide)
+
+	// The author is told where it went, since nothing else in hark reads the directory.
+	assert.Contains(t, opts.Out.(*bytes.Buffer).String(), guidePath(3))
+}
+
+// The seeded guide is a placeholder, so it can't be publishing anything on its own.
+func TestRelease_MigrationGuideTemplateIsEntirelyAComment(t *testing.T) {
+	assert.Empty(t, strings.TrimSpace(stripHTMLComments(migrationGuideTemplate)))
+}
+
+// Whatever is in the guide already is someone's work in progress, and every release after
+// the first would otherwise walk over it.
+func TestRelease_LeavesAnExistingMigrationGuideAlone(t *testing.T) {
+	fs, opts := releaseFixture(t, `{"releases":[]}`,
+		map[string]string{"2026-09-08_xavdid_add-widgets.change.md": pendingChangefile})
+	require.NoError(t, afero.WriteFile(fs, guidePath(3), []byte("## Upgrading to v3\n"), 0o644))
+
+	require.NoError(t, Release(context.Background(), opts, releases.Release{Version: "2.3.4"}))
+
+	guide, err := afero.ReadFile(fs, guidePath(3))
+	require.NoError(t, err)
+	assert.Equal(t, "## Upgrading to v3\n", string(guide))
+}
+
+// refusesToCreate is a filesystem that won't create one path, so a test can watch what
+// happens when seeding the migration guide fails.
+type refusesToCreate struct {
+	afero.Fs
+	path string
+}
+
+func (r refusesToCreate) OpenFile(name string, flag int, perm os.FileMode) (afero.File, error) {
+	if name == r.path {
+		return nil, errors.New("disk is on fire")
+	}
+	return r.Fs.OpenFile(name, flag, perm)
+}
+
+// The release is already recorded by the time the guide is seeded, so failing to seed one
+// reports the trouble instead of reporting a release that did happen as an error.
+func TestRelease_SurvivesAFailureToSeedTheMigrationGuide(t *testing.T) {
+	fs, opts := releaseFixture(t, `{"releases":[]}`,
+		map[string]string{"2026-09-08_xavdid_add-widgets.change.md": pendingChangefile})
+	opts.Fs = refusesToCreate{Fs: fs, path: guidePath(3)}
+
+	require.NoError(t, Release(context.Background(), opts, releases.Release{Version: "2.3.4"}))
+
+	// The release stands, and the changelog was still rebuilt.
+	assert.Equal(t, "2.3.4",
+		read(t, fs, changesFixtureDir+"/2026-09-08_xavdid_add-widgets.change.md").ReleasedInVersion)
+	changelog, err := afero.ReadFile(fs, changelogPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(changelog), "* Add widgets")
+
+	// The trouble is said out loud rather than swallowed: which file, and what went wrong
+	// with it. The wording around those is free to change.
+	out := opts.Out.(*bytes.Buffer).String()
+	assert.Contains(t, out, guidePath(3))
+	assert.Contains(t, out, "disk is on fire")
+}
+
+// A prerelease is previewing a major that hasn't shipped, so the guide it needs is its own
+// major's — which the last GA release before it seeded.
+func TestRelease_PrereleasesSeedNoMigrationGuide(t *testing.T) {
+	fs, opts := releaseFixture(t,
+		`{"metadata":{"language":"go","channel":"beta"},"releases":[]}`,
+		map[string]string{"2026-09-08_xavdid_add-widgets.change.md": pendingChangefile})
+
+	require.NoError(t, Release(context.Background(), opts, releases.Release{Version: "3.0.0-beta.1"}))
+
+	for _, major := range []int{3, 4} {
+		exists, err := afero.Exists(fs, guidePath(major))
+		require.NoError(t, err)
+		assert.False(t, exists, "v%d", major)
+	}
 }

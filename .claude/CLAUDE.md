@@ -30,10 +30,17 @@ meant to be embedded, and exports only `Execute`.
 ## Fixed layout
 
 The paths hark uses are hardcoded, not configurable: `.hark/releases.json`,
-`.hark/changes/*.change.md`, `.hark/intros/intro-<version>.md`, and `CHANGELOG.md`
-at the repo root. Only `Options.Root` moves them, and it has no CLI flag — it
-exists so a programmatic caller holding several checkouts can work through them one
-at a time. Don't add path flags.
+`.hark/changes/*.change.md`, `.hark/intros/intro-<version>.md`,
+`.hark/migration-guides/v<major>.md`, and `CHANGELOG.md` at the repo root. Only
+`Options.Root` moves them, and it has no CLI flag — it exists so a programmatic
+caller holding several checkouts can work through them one at a time. Don't add
+path flags.
+
+Migration guides are the one thing under `.hark/` that hark writes but never reads:
+`release` seeds the next major's guide and the `require-migration-guide` action
+watches the directory. So the name is a convention two places have to agree on, not
+something a lookup would catch — `MigrationGuideName` and the action's
+`.hark/migration-guides/` glob have to match.
 
 A release's intro is a file, never a field: it exists if and only if
 `.hark/intros/intro-<version>.md` does, so nothing can record it inconsistently.

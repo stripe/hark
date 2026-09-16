@@ -224,6 +224,33 @@ func versionStrings(f *File) []string {
 	return out
 }
 
+func TestMajor(t *testing.T) {
+	for _, tt := range []struct {
+		version string
+		want    int
+	}{
+		{"22.6.0", 22},
+		{"1.2.3", 1},
+		{"0.5.0", 0},
+		// A prerelease of a major reports that major, not the one before it.
+		{"22.7.0-beta.1", 22},
+		{"15.7.0a3", 15},
+	} {
+		t.Run(tt.version, func(t *testing.T) {
+			major, ok := Major(tt.version)
+			require.True(t, ok)
+			assert.Equal(t, tt.want, major)
+		})
+	}
+
+	// Anything IsVersionValid rejects has no major, rather than a zero that reads like 0.x.
+	for _, version := range []string{"", "1.2", "v1.2.0", "not-a-version", "1.2.3-nonsense"} {
+		major, ok := Major(version)
+		assert.False(t, ok, "version %q", version)
+		assert.Zero(t, major, "version %q", version)
+	}
+}
+
 func TestChannel(t *testing.T) {
 	for _, tt := range []struct{ version, want string }{
 		// GA is the absence of a suffix.
