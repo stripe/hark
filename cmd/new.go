@@ -17,7 +17,6 @@ func newNewCmd(g *globalFlags) *cobra.Command {
 		draft    changefile.Changefile
 		bodyFile string
 		user     string
-		date     string
 	)
 
 	cmd := &cobra.Command{
@@ -36,7 +35,7 @@ func newNewCmd(g *globalFlags) *cobra.Command {
 					strings.Join(changefile.SemverLevels, ", "))
 			}
 
-			newOpts := changelog.NewOptions{BodyPath: bodyFile, User: user, Date: date}
+			newOpts := changelog.NewOptions{BodyPath: bodyFile, User: user}
 			if len(args) > 0 {
 				newOpts.Slug = args[0]
 			}
@@ -60,8 +59,6 @@ func newNewCmd(g *globalFlags) *cobra.Command {
 	f.StringVar(&draft.Body, "body", "", "markdown to nest under the changelog bullet. Mutually exclusive with --body-file")
 	f.StringVar(&bodyFile, "body-file", "", "file to read the body from.  Mutually exclusive with --body")
 	f.StringVar(&user, "user", "", "who to attribute the change to (defaults to $USER)")
-	f.StringVar(&date, "date", "",
-		"the date the filename leads with, like "+changefile.DateFormat+" (defaults to today). Changes are listed in the changelog in this order")
 
 	return cmd
 }

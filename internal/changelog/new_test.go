@@ -278,22 +278,8 @@ func TestNew_UsesAnExplicitSlug(t *testing.T) {
 	assert.NotContains(t, out.String(), "rename it")
 }
 
-// An explicit date leads the filename in place of today's, for a change written on one
-// day and filed on another.
-func TestNew_UsesAnExplicitDate(t *testing.T) {
-	_, _, opts := newFixture(t)
-
-	path, err := newChange(t, opts,
-		changefile.Changefile{Title: "Add widgets"},
-		NewOptions{Slug: "add-widgets", Date: "2026-08-01"})
-	require.NoError(t, err)
-
-	assert.Equal(t, ".hark/changes/2026-08-01_xavdid_add-widgets.change.md", path)
-	assert.Empty(t, changefile.ValidateName(path))
-}
-
-// Without one, the date is today's, read from the same clock everything else uses.
-func TestNew_DefaultsTheDateToToday(t *testing.T) {
+// The date leading the filename is today's, read from the same clock everything else uses.
+func TestNew_DatesTheNameToday(t *testing.T) {
 	_, _, opts := newFixture(t)
 
 	path, err := newChange(t, opts,
@@ -301,26 +287,7 @@ func TestNew_DefaultsTheDateToToday(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, ".hark/changes/2026-09-09_xavdid_add-widgets.change.md", path)
-}
-
-// The date is what the changelog sorts changes by, so a name it can't sort is refused
-// rather than written and left for a reader to puzzle over.
-func TestNew_RefusesAnUnusableDate(t *testing.T) {
-	for _, date := range []string{"2026-13-45", "2026-9-9", "09-09-2026", "yesterday", "2026-09-09/../other"} {
-		t.Run(date, func(t *testing.T) {
-			fs, _, opts := newFixture(t)
-
-			_, err := newChange(t, opts,
-				changefile.Changefile{Title: "Add widgets"},
-				NewOptions{Slug: "add-widgets", Date: date})
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), "ISO date")
-
-			exists, err := afero.DirExists(fs, changesFixtureDir)
-			require.NoError(t, err)
-			assert.False(t, exists, "wrote something before rejecting the date")
-		})
-	}
+	assert.Empty(t, changefile.ValidateName(path))
 }
 
 // A slug is one segment of a filename, so anything with a separator in it would land
