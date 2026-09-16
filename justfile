@@ -19,6 +19,10 @@ test *args="./...":
 build:
     go build -o bin/hark .
 
+# validate all 21 SDK channel branches against the local build, so a new rule cannot reject live data unnoticed
+validate-sdks: build
+    HARK_BIN="{{ justfile_directory() }}/bin/hark" potent run misc/validate-existing/validate-existing.plan.json
+
 # run the linter
 lint:
     go fix -diff ./...
@@ -51,7 +55,7 @@ dev *args:
 
 # trigger a release with the given version
 [confirm("This will tag the latest commit and push that tag, kicking off the release workflow. Proceed (y/N)?")]
-release version:
+release version: validate-sdks
     {{ assert(version =~ "^\\d+\\.\\d+\\.\\d+$", "call this with a semver version, got \"" + version + "\"") }}
 
     {{ assert(`grep -c -i -E '^#+ *\[?unreleased' CHANGELOG.md || true` == "0", "CHANGELOG.md still has an Unreleased heading; retitle it to " + version + " first") }}

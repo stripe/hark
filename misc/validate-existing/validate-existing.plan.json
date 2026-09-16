@@ -1,0 +1,120 @@
+{
+  "config": {
+    "mode": "command",
+    "last_run": null
+  },
+  "version": "v1",
+  "comment": "Run the local hark's `validate` over all 21 SDK branches. Useful for regression testing when making changes.",
+  "operations": [
+    {
+      "comment": "stash the branch this repo started on in its .git directory, so we can always return there after a successful run.",
+      "slug": "raw-command",
+      "config": {
+        "arguments": [
+          "bash",
+          "-c",
+          "set -euo pipefail; f=.git/hark-validate-branch; if [ ! -f \"$f\" ]; then b=$(git branch --show-current); [ -n \"$b\" ] || b=$(git rev-parse HEAD); printf '%s\\n' \"$b\" > \"$f\"; fi; cat \"$f\""
+        ],
+        "name": "save-branch"
+      }
+    },
+    {
+      "comment": "",
+      "slug": "git-status"
+    },
+
+    {
+      "slug": "git-switch",
+      "config": {
+        "branch": "master",
+        "create_if_missing": false
+      }
+    },
+    {
+      "comment": null,
+      "slug": "git-pull"
+    },
+    {
+      "comment": "uses the local build, not the released one",
+      "slug": "raw-command",
+      "config": {
+        "arguments": [
+          "bash",
+          "-c",
+          "exec \"${HARK_BIN:-$HOME/stripe/hark/bin/hark}\" validate"
+        ],
+        "name": "validate-ga"
+      }
+    },
+
+    {
+      "slug": "git-switch",
+      "config": {
+        "branch": "beta",
+        "create_if_missing": false
+      }
+    },
+    {
+      "comment": null,
+      "slug": "git-pull"
+    },
+    {
+      "comment": null,
+      "slug": "raw-command",
+      "config": {
+        "arguments": [
+          "bash",
+          "-c",
+          "exec \"${HARK_BIN:-$HOME/stripe/hark/bin/hark}\" validate"
+        ],
+        "name": "validate-beta"
+      }
+    },
+
+    {
+      "slug": "git-switch",
+      "config": {
+        "branch": "private-preview",
+        "create_if_missing": false
+      }
+    },
+    {
+      "comment": null,
+      "slug": "git-pull"
+    },
+    {
+      "comment": null,
+      "slug": "raw-command",
+      "config": {
+        "arguments": [
+          "bash",
+          "-c",
+          "exec \"${HARK_BIN:-$HOME/stripe/hark/bin/hark}\" validate"
+        ],
+        "name": "validate-private-preview"
+      }
+    },
+
+    {
+      "comment": "read the stashed branch from the first step and check it out again, so everything is right where you left it",
+      "slug": "raw-command",
+      "config": {
+        "arguments": [
+          "bash",
+          "-c",
+          "set -euo pipefail; f=.git/hark-validate-branch; b=$(cat \"$f\"); if [ -z \"$b\" ]; then echo \"no starting branch recorded in $f\" >&2; exit 1; fi; git checkout \"$b\"; rm \"$f\""
+        ],
+        "name": "restore-branch"
+      }
+    }
+  ],
+  "directories": [
+    "~/stripe/stripe-java",
+    "~/stripe/stripe-python",
+    "~/stripe/stripe-ruby",
+    "~/stripe/stripe-php",
+    "~/stripe/stripe-go",
+    "~/stripe/stripe-node",
+    "~/stripe/stripe-dotnet"
+  ]
+}
