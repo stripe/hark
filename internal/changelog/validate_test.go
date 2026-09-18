@@ -402,6 +402,56 @@ func TestValidate_AcceptsEverySDKLanguage(t *testing.T) {
 	}
 }
 
+func TestValidate_AcceptsExplicitRepository(t *testing.T) {
+	fs := buildFixture(t, `{"metadata":{"repository":"octocat/widgets","channel":"ga"},"releases":[]}`,
+		map[string]string{
+			"2026-01-14_xavdid_add-widgets.change.md": "---\ntitle: \"Add widgets\"\n" +
+				"pr_url: \"https://github.com/octocat/widgets/pull/42\"\n" +
+				"github_issues_resolved:\n  - \"https://github.com/octocat/widgets/issues/7\"\n---\n",
+		})
+
+	_, err := runValidate(t, fs)
+	require.NoError(t, err)
+}
+
+func TestValidate_ExplicitRepositoryRejectsLinksToAnotherRepo(t *testing.T) {
+	fs := buildFixture(t, `{"metadata":{"repository":"octocat/widgets","channel":"ga"},"releases":[]}`,
+		map[string]string{
+			"2026-01-14_xavdid_add-widgets.change.md": "---\ntitle: \"Add widgets\"\n" +
+				"pr_url: \"https://github.com/octocat/gadgets/pull/42\"\n---\n",
+		})
+
+	out, err := runValidate(t, fs)
+	require.Error(t, err)
+	assert.Contains(t, out, "pr_url names octocat/gadgets, but this repo is octocat/widgets")
+}
+
+func TestValidate_RequiresExactlyOneRepositoryIdentity(t *testing.T) {
+	for name, metadata := range map[string]string{
+		"neither": `{"channel":"ga"}`,
+		"both":    `{"language":"go","repository":"octocat/widgets","channel":"ga"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			fs := buildFixture(t, `{"metadata":`+metadata+`,"releases":[]}`, map[string]string{})
+			out, err := runValidate(t, fs)
+			require.Error(t, err)
+			assert.Contains(t, out, "exactly one of metadata.language or metadata.repository is required")
+		})
+	}
+}
+
+func TestValidate_RejectsMalformedRepository(t *testing.T) {
+	for _, repo := range []string{"widgets", "octocat/widgets/extra", "/widgets", "octocat/"} {
+		t.Run(repo, func(t *testing.T) {
+			fs := buildFixture(t, `{"metadata":{"repository":"`+repo+`","channel":"ga"},"releases":[]}`,
+				map[string]string{})
+			out, err := runValidate(t, fs)
+			require.Error(t, err)
+			assert.Contains(t, out, "is not formatted as owner/name")
+		})
+	}
+}
+
 // The intro count is out of every intro, not just the bad ones — a denominator equal
 // to the numerator would say nothing.
 func TestValidate_IntroCountIsOutOfAllIntros(t *testing.T) {

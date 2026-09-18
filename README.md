@@ -38,7 +38,34 @@ hark inspect "${changefiles[@]}" | jq -e '.[] | select(.semver_level == "major")
 
 ### Releasing versions
 
-`hark release VERSION` adds a new entry to `releases.json` and populates information (e.g. pinned api version)
+`hark release VERSION` adds a new entry to `releases.json` and populates information (e.g. pinned api version).
+
+Official SDK repositories identify themselves with a recognized language:
+
+```json
+{
+  "metadata": {
+    "language": "go",
+    "channel": "ga"
+  },
+  "releases": []
+}
+```
+Providing a language identifies the manifest as part of the official SDK contract and enables SDK-specific release behavior such as seeding major version migration guides.
+
+Other GitHub repositories identify themselves explicitly with an `owner/name` repository:
+
+```json
+{
+  "metadata": {
+    "repository": "octocat/widgets",
+    "channel": "ga"
+  },
+  "releases": []
+}
+```
+
+Provide exactly one of `metadata.language` or `metadata.repository`.
 
 ## Writing a great changelog
 

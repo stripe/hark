@@ -619,6 +619,18 @@ func TestRelease_SurvivesAFailureToSeedTheMigrationGuide(t *testing.T) {
 	assert.Contains(t, out, "disk is on fire")
 }
 
+func TestRelease_GenericRepositoryDoesNotSeedMigrationGuide(t *testing.T) {
+	fs, opts := releaseFixture(t,
+		`{"metadata":{"repository":"octocat/widgets","channel":"ga"},"releases":[]}`,
+		map[string]string{"2026-09-08_xavdid_add-widgets.change.md": pendingChangefile})
+
+	require.NoError(t, Release(context.Background(), opts, releases.Release{Version: "3.0.0"}))
+
+	exists, err := afero.Exists(fs, guidePath(4))
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
 // A prerelease is previewing a major that hasn't shipped, so the guide it needs is its own
 // major's — which the last GA release before it seeded.
 func TestRelease_PrereleasesSeedNoMigrationGuide(t *testing.T) {

@@ -26,8 +26,7 @@ func Build(ctx context.Context, opts Options) error {
 	}
 
 	var buf bytes.Buffer
-	metadata := releaseFile.Metadata
-	if err := render(&buf, metadata.Language, metadata.Channel, releaseGroups); err != nil {
+	if err := render(&buf, releaseFile.Metadata, releaseGroups); err != nil {
 		return err
 	}
 
