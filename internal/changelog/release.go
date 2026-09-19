@@ -88,9 +88,11 @@ func Release(ctx context.Context, opts Options, release releases.Release) error 
 		return err
 	}
 
-	if seedErr := seedNextMigrationGuide(opts, entry.Version); seedErr != nil {
-		if _, err := fmt.Fprintf(opts.Out, "warning: failed to proactively create the next migration guide (%v); you can safely ignore this. The release was not affected\n", seedErr); err != nil {
-			return err
+	if releaseFile.Metadata.Language != "" {
+		if seedErr := seedNextMigrationGuide(opts, entry.Version); seedErr != nil {
+			if _, err := fmt.Fprintf(opts.Out, "warning: failed to proactively create the next migration guide (%v); you can safely ignore this. The release was not affected\n", seedErr); err != nil {
+				return err
+			}
 		}
 	}
 

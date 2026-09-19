@@ -282,27 +282,32 @@ func TestSdkRepo(t *testing.T) {
 
 func TestChangelogRef(t *testing.T) {
 	assert.Equal(t, "[the GA changelog](https://github.com/stripe/stripe-python/blob/master/CHANGELOG.md)",
-		changelogRef("the GA changelog", "python"))
+		changelogRef("the GA changelog", releases.Metadata{Language: "python"}))
+	assert.Equal(t, "[the GA changelog](https://github.com/octocat/widgets/blob/master/CHANGELOG.md)",
+		changelogRef("the GA changelog", releases.Metadata{Repository: "octocat/widgets"}))
 
 	// Without a repo to point at, the label is left as prose rather than linked nowhere.
-	assert.Equal(t, "the GA changelog", changelogRef("the GA changelog", ""))
+	assert.Equal(t, "the GA changelog", changelogRef("the GA changelog", releases.Metadata{}))
 }
 
 func TestChannelNotice(t *testing.T) {
-	beta := channelNotice(releases.ChannelBeta, "python")
+	beta := channelNotice(releases.Metadata{Language: "python", Channel: releases.ChannelBeta})
 	assert.Contains(t, beta, "**public preview**")
 	assert.Contains(t, beta, "[the GA changelog](https://github.com/stripe/stripe-python/blob/master/CHANGELOG.md)")
 	assert.True(t, strings.HasPrefix(beta, "> "), "the notice is a blockquote")
 
+	generic := channelNotice(releases.Metadata{Repository: "octocat/widgets", Channel: releases.ChannelBeta})
+	assert.Contains(t, generic, "https://github.com/octocat/widgets/blob/master/CHANGELOG.md")
+
 	// Private preview builds on GA too, not on public preview.
-	private := channelNotice(releases.ChannelPrivatePreview, "go")
+	private := channelNotice(releases.Metadata{Language: "go", Channel: releases.ChannelPrivatePreview})
 	assert.Contains(t, private, "**private preview**")
 	assert.NotContains(t, private, "public preview")
 
 	// GA is the changelog the others point at, so it stands alone. An unknown or missing
 	// channel says nothing rather than guessing.
 	for _, channel := range []string{releases.ChannelGA, "", "nightly"} {
-		assert.Empty(t, channelNotice(channel, "go"), channel)
+		assert.Empty(t, channelNotice(releases.Metadata{Language: "go", Channel: channel}), channel)
 	}
 }
 
@@ -519,7 +524,7 @@ func TestRender(t *testing.T) {
 	}
 
 	var b bytes.Buffer
-	require.NoError(t, render(&b, "go", releases.ChannelGA, groups))
+	require.NoError(t, render(&b, releases.Metadata{Language: "go", Channel: releases.ChannelGA}, groups))
 
 	// The whole file: the generated-file warning, one h1, then a blank line before each
 	// group.
@@ -531,12 +536,12 @@ func TestRender(t *testing.T) {
 // A prerelease changelog opens with a standing note, between the title and the releases.
 func TestRenderIncludesTheChannelNotice(t *testing.T) {
 	var b bytes.Buffer
-	require.NoError(t, render(&b, "python", releases.ChannelBeta, []releaseGroup{
+	require.NoError(t, render(&b, releases.Metadata{Language: "python", Channel: releases.ChannelBeta}, []releaseGroup{
 		{Release: &releases.Release{Version: "1.0.0-beta.1", ReleasedOn: "2026-01-15"}},
 	}))
 
 	assert.Equal(t, generatedNotice+"\n\n# Changelog\n"+
-		"\n"+channelNotice(releases.ChannelBeta, "python")+"\n"+
+		"\n"+channelNotice(releases.Metadata{Language: "python", Channel: releases.ChannelBeta})+"\n"+
 		"\n## <a id=\"1-0-0-beta-1\"></a>1.0.0-beta.1 - 2026-01-15\n", b.String())
 }
 
@@ -544,7 +549,7 @@ func TestRenderIncludesTheChannelNotice(t *testing.T) {
 // than failing or writing a stray blank line.
 func TestRenderWithNoGroups(t *testing.T) {
 	var b bytes.Buffer
-	require.NoError(t, render(&b, "go", releases.ChannelGA, nil))
+	require.NoError(t, render(&b, releases.Metadata{Language: "go", Channel: releases.ChannelGA}, nil))
 
 	assert.Equal(t, generatedNotice+"\n\n# Changelog\n", b.String())
 }
@@ -585,12 +590,12 @@ func TestRenderReportsAFailedWrite(t *testing.T) {
 
 	// A clean render first, to learn how many writes reaching the end takes.
 	counted := &failingWriter{}
-	require.NoError(t, render(counted, "python", releases.ChannelBeta, groups))
+	require.NoError(t, render(counted, releases.Metadata{Language: "python", Channel: releases.ChannelBeta}, groups))
 	require.NotZero(t, counted.writes)
 
 	// Failing at any point along the way is reported.
 	for failOn := 1; failOn <= counted.writes; failOn++ {
-		err := render(&failingWriter{failOn: failOn}, "python", releases.ChannelBeta, groups)
+		err := render(&failingWriter{failOn: failOn}, releases.Metadata{Language: "python", Channel: releases.ChannelBeta}, groups)
 		require.ErrorIs(t, err, errWriteFailed, "a failure on write %d was swallowed", failOn)
 	}
 }

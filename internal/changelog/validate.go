@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -26,6 +27,8 @@ type fileReport struct {
 const versionFormatHint = "expected major.minor.patch, optionally followed by an alpha or beta suffix"
 
 const dateFormatHint = "expected an ISO date, like 2026-01-22"
+
+var repositoryRegex = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 
 // validates the holistic state of a repo, reporting everything that's wrong rather than the
 // first thing. Each check has a check*/validate* function below:
@@ -140,12 +143,18 @@ func checkMetadata(releasesFile *releases.File) []fileReport {
 	}
 
 	var errs []error
-	switch language := releasesFile.Metadata.Language; {
-	case language == "":
-		errs = append(errs, errors.New("metadata.language is required, but missing"))
-	case !slices.Contains(sdkLanguages, language):
+	language := releasesFile.Metadata.Language
+	repo := releasesFile.Metadata.Repository
+	switch {
+	case language == "" && repo == "":
+		errs = append(errs, errors.New("exactly one of metadata.language or metadata.repository is required, but both are missing"))
+	case language != "" && repo != "":
+		errs = append(errs, errors.New("exactly one of metadata.language or metadata.repository is required, but both are present"))
+	case language != "" && !slices.Contains(sdkLanguages, language):
 		errs = append(errs, fmt.Errorf("metadata.language %q is not one of: %s",
 			language, strings.Join(sdkLanguages, ", ")))
+	case repo != "" && !repositoryRegex.MatchString(repo):
+		errs = append(errs, fmt.Errorf("metadata.repository %q is not formatted as owner/name", repo))
 	}
 
 	channel := releasesFile.Metadata.Channel
@@ -298,7 +307,7 @@ func checkLinks(cf *changefile.Changefile, releasesFile *releases.File) []error 
 	if releasesFile == nil {
 		return nil
 	}
-	repo := sdkRepo(releasesFile.Metadata.Language)
+	repo := repository(releasesFile.Metadata)
 	if repo == "" {
 		return nil
 	}

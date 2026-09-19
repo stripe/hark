@@ -266,10 +266,17 @@ func sdkRepo(language string) string {
 	return "stripe/stripe-" + language
 }
 
+func repository(metadata releases.Metadata) string {
+	if metadata.Repository != "" {
+		return metadata.Repository
+	}
+	return sdkRepo(metadata.Language)
+}
+
 // changelogRef names another branch's changelog: a link when the repository could be
 // worked out, and plain prose when it could not.
-func changelogRef(label, language string) string {
-	repo := sdkRepo(language)
+func changelogRef(label string, metadata releases.Metadata) string {
+	repo := repository(metadata)
 	if repo == "" {
 		return label
 	}
@@ -277,9 +284,9 @@ func changelogRef(label, language string) string {
 }
 
 // a standing note a prerelease channel's changelog opens with pointing readers to the GA changelog.
-func channelNotice(channel, language string) string {
+func channelNotice(metadata releases.Metadata) string {
 	var name string
-	switch channel {
+	switch metadata.Channel {
 	case releases.ChannelBeta:
 		name = "public preview"
 	case releases.ChannelPrivatePreview:
@@ -292,19 +299,19 @@ func channelNotice(channel, language string) string {
 	// from master and neither takes them from the other.
 	return fmt.Sprintf(
 		"> This changelog only covers the **%s** releases. Each release builds on the most recent GA release; see those notes in %s.",
-		name, changelogRef("the GA changelog", language))
+		name, changelogRef("the GA changelog", metadata))
 }
 
 // render writes the whole changelog: the generated-file notice, an h1 title, the
 // channel's standing note if it has one, then each group separated by a blank line.
-func render(w io.Writer, language, channel string, groups []releaseGroup) error {
+func render(w io.Writer, metadata releases.Metadata, groups []releaseGroup) error {
 	if _, err := fmt.Fprintf(w, "%s\n\n", generatedNotice); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "# Changelog\n"); err != nil {
 		return err
 	}
-	if notice := channelNotice(channel, language); notice != "" {
+	if notice := channelNotice(metadata); notice != "" {
 		if _, err := fmt.Fprintf(w, "\n%s\n", notice); err != nil {
 			return err
 		}

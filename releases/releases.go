@@ -44,8 +44,9 @@ type Release struct {
 
 // Information about the `releases.json` file itself
 type Metadata struct {
-	Language string `json:"language"`
-	Channel  string `json:"channel"`
+	Language   string `json:"language,omitempty"`
+	Repository string `json:"repository,omitempty"`
+	Channel    string `json:"channel"`
 }
 
 // File is the parsed contents of a releases JSON file. Versions are ordered by release date descending (ties broken by higher semver version first)
