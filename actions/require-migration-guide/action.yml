@@ -49,7 +49,8 @@ runs:
             | .filename' "$FILES" |
           grep -E '^\.hark/migration-guides/.+' || true)
 
-        # Only care if we find an explicit `semver_level: major`
+        # Only pending changefiles with an explicit `semver_level: major` need a guide.
+        # Released changefiles may be added while adopting Hark or recovering history.
         breaking=""
         while IFS= read -r path; do
           [ -n "$path" ] || continue
@@ -68,7 +69,8 @@ runs:
                   gsub(/^["'\'']|["'\'']$/, "", v)
                   if (v == "major") found = 1
                 }
-                END { exit found ? 0 : 1 }
+                infm && /^released_in_version:/ { released = 1 }
+                END { exit found && !released ? 0 : 1 }
               ' "$path"; then
             breaking="${breaking}${path}"$'\n'
           fi
