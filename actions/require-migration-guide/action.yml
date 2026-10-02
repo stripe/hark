@@ -1,15 +1,33 @@
 name: "Require a migration guide"
-description: "Fail a pull request that adds a breaking changefile without touching a migration guide"
+description: "Fail a pull request that adds a breaking changefile without touching a migration guide, unless it opts out via a checkbox in its description"
 
 # Though the `.hark/migration-guides/` directory isn't read by `hark` directly, this seemed like the best home for this check.
 # Basically, if you write a breaking changefile, you should also edit a migration guide file
 # The openapi bot is exempt from this check, since it routinely adds breaking changes and the migration guide is covered elsewhere
 # Only pull requests into a branch that eventually hits `master` need a guide, since that's the only branch we release GA versions from
+#
+# Run this on `pull_request` with `edited` added to the default event types, so that
+# toggling the opt-out box re-runs the check:
+#
+#   on:
+#     pull_request:
+#       types: [opened, synchronize, reopened, edited]
+
+outputs:
+  skipped:
+    description: "'true' when the pull request opted out of the check"
+    value: ${{ steps.opt-out.outputs.skipped }}
 
 runs:
   using: "composite"
   steps:
+    - id: opt-out
+      uses: $/actions/opt-out-checkbox
+      with:
+        checkbox: skip-migration-guide
+
     - name: Require a migration guide for breaking changes
+      if: steps.opt-out.outputs.skipped != 'true'
       shell: bash
       run: |
         set -euo pipefail
@@ -105,7 +123,7 @@ runs:
           TRUNCATED=" (this pull request touches ${CHANGED_FILES} files and GitHub only reports the first 3000, so a guide may have been missed)"
         fi
 
-        echo "::error::This pull request adds a breaking changefile but touches nothing in .hark/migration-guides/${TRUNCATED}. Please add upgrade instructions for users."
+        echo "::error::This pull request adds a breaking changefile but touches nothing in .hark/migration-guides/${TRUNCATED}. Please add upgrade instructions for users, or check the \`skip-migration-guide\` box in the description if no migration guide is needed."
         exit 1
       env:
         GH_TOKEN: ${{ github.token }}
