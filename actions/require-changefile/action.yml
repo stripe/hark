@@ -8,6 +8,11 @@ description: "Fail a pull request that adds no changefile, unless it opts out of
 #     pull_request:
 #       types: [opened, synchronize, reopened, edited]
 
+inputs:
+  path:
+    description: "Directory changefiles live in, relative to the repo root"
+    default: ".hark/changes"
+
 outputs:
   skipped:
     description: "'true' when the pull request opted out of the check"
@@ -32,16 +37,16 @@ runs:
         # files the pull request touches.
         #
         # Nested directories are `tree` entries rather than `blob`s, so they're skipped along
-        # with anything inside them: a changefile is only read at the top of `.hark/changes`.
+        # with anything inside them: a changefile is only read at the top of the changes directory.
         changefiles() {
           local out
-          if ! out=$(gh api "repos/${GH_REPO}/git/trees/${1}:.hark/changes" \
+          if ! out=$(gh api "repos/${GH_REPO}/git/trees/${1}:${CHANGEFILES_PATH}" \
               --jq '.tree[] | select(.type == "blob") | .path' 2>&1); then
             # A branch without the directory (the first changefile ever, or a fork of a repo
             # that predates hark) has no changefiles in it, which is not an error.
             case "$out" in
               *"Not Found"*) return 0 ;;
-              *) echo "::error::could not list .hark/changes at ${1}: ${out}"; return 1 ;;
+              *) echo "::error::could not list ${CHANGEFILES_PATH} at ${1}: ${out}"; return 1 ;;
             esac
           fi
           printf '%s\n' "$out"
@@ -57,7 +62,7 @@ runs:
         if [ -n "$added" ]; then
           echo "this pull request adds:"
           while IFS= read -r path; do
-            echo "  .hark/changes/${path}"
+            echo "  ${CHANGEFILES_PATH}/${path}"
           done <<<"$added"
           exit 0
         fi
@@ -69,3 +74,4 @@ runs:
         GH_REPO: ${{ github.repository }}
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        CHANGEFILES_PATH: ${{ inputs.path }}

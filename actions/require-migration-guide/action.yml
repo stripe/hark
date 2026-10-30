@@ -13,6 +13,11 @@ description: "Fail a pull request that adds a breaking changefile without touchi
 #     pull_request:
 #       types: [opened, synchronize, reopened, edited]
 
+inputs:
+  path:
+    description: "The repo's hark directory, relative to the repo root"
+    default: ".hark"
+
 outputs:
   skipped:
     description: "'true' when the pull request opted out of the check"
@@ -56,8 +61,13 @@ runs:
         FILES="${RUNNER_TEMP}/pr-files.json"
         gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}/files" --paginate >"$FILES"
 
+        # The hark directory may contain regex metacharacters (just the dot in the
+        # default ".hark", but a custom path could have more), so escape it before
+        # splicing it into the grep patterns below.
+        HARK_DIR_RE=$(printf '%s' "$HARK_DIR" | sed 's/[.[\^$*+?()|{}]/\\&/g')
+
         added=$(jq -r '.[] | select(.status == "added") | .filename' "$FILES" |
-          grep -E '^\.hark/changes/[^/]+\.change\.md$' || true)
+          grep -E "^${HARK_DIR_RE}/changes/[^/]+\.change\.md\$" || true)
 
         # Any file under the directory counts, at any depth, whether it was added
         # or edited
@@ -65,7 +75,7 @@ runs:
             | select(.status == "added" or .status == "modified"
                      or .status == "changed" or .status == "renamed")
             | .filename' "$FILES" |
-          grep -E '^\.hark/migration-guides/.+' || true)
+          grep -E "^${HARK_DIR_RE}/migration-guides/.+" || true)
 
         # Only pending changefiles with an explicit `semver_level: major` need a guide.
         # Released changefiles may be added while adopting Hark or recovering history.
@@ -123,7 +133,7 @@ runs:
           TRUNCATED=" (this pull request touches ${CHANGED_FILES} files and GitHub only reports the first 3000, so a guide may have been missed)"
         fi
 
-        echo "::error::This pull request adds a breaking changefile but touches nothing in .hark/migration-guides/${TRUNCATED}. Please add upgrade instructions for users, or check the \`skip-migration-guide\` box in the description if no migration guide is needed."
+        echo "::error::This pull request adds a breaking changefile but touches nothing in ${HARK_DIR}/migration-guides/${TRUNCATED}. Please add upgrade instructions for users, or check the \`skip-migration-guide\` box in the description if no migration guide is needed."
         exit 1
       env:
         GH_TOKEN: ${{ github.token }}
@@ -132,6 +142,7 @@ runs:
         CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
         PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+        HARK_DIR: ${{ inputs.path }}
         # Whitespace-separated logins
         EXEMPT_AUTHORS: "stripe-openapi[bot]"
         # Whitespace-separated branch names; a pull request into anything else is exempt

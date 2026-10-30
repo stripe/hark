@@ -1,6 +1,11 @@
 name: "Validate changefiles"
 description: "Run `hark validate` over every changefile in the repository. Needs the repo checked out already."
 
+inputs:
+  working-directory:
+    description: "Directory to run `hark validate` in, relative to the repo root"
+    default: "."
+
 runs:
   using: "composite"
   steps:
@@ -8,4 +13,5 @@ runs:
 
     - name: Validate changefiles
       shell: bash
-      run: hark validate # looks for the repo's root `.hark` directory
+      working-directory: ${{ inputs.working-directory }}
+      run: hark validate # looks for the `.hark` directory under the working directory

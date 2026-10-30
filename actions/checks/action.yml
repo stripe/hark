@@ -21,10 +21,24 @@ description: "Run all the changelog-specific validation a PR might need"
 # Neither can be declared here: a composite action cannot grant its own permissions or
 # declare its own triggers.
 
+inputs:
+  path:
+    description: "The repo's hark directory, relative to the repo root"
+    default: ".hark"
+  working-directory:
+    description: "Directory to run `hark validate` in, relative to the repo root"
+    default: "."
+
 runs:
   using: "composite"
   steps:
     # Ordered cheapest to most expensive
     - uses: $/actions/require-changefile
+      with:
+        path: ${{ inputs.path }}/changes
     - uses: $/actions/require-migration-guide
+      with:
+        path: ${{ inputs.path }}
     - uses: $/actions/validate-changefiles
+      with:
+        working-directory: ${{ inputs.working-directory }}
