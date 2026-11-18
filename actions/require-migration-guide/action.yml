@@ -14,9 +14,9 @@ description: "Fail a pull request that adds a breaking changefile without touchi
 #       types: [opened, synchronize, reopened, edited]
 
 inputs:
-  path:
-    description: "The repo's hark directory, relative to the repo root"
-    default: ".hark"
+  working-directory:
+    description: "Directory containing the `.hark` directory, relative to the repo root"
+    default: "."
 
 outputs:
   skipped:
@@ -58,12 +58,20 @@ runs:
         done
         set +f
 
+        # The `.hark` directory sits directly under the working directory
+        # (the repo root when it's "."), so this is its path relative to the repo root.
+        dir="${WORKING_DIRECTORY%/}"
+        dir="${dir#./}"
+        case "$dir" in
+          ""|.) HARK_DIR=".hark" ;;
+          *) HARK_DIR="${dir}/.hark" ;;
+        esac
+
         FILES="${RUNNER_TEMP}/pr-files.json"
         gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}/files" --paginate >"$FILES"
 
-        # The hark directory may contain regex metacharacters (just the dot in the
-        # default ".hark", but a custom path could have more), so escape it before
-        # splicing it into the grep patterns below.
+        # The hark directory may contain regex metacharacters (at least the dot in
+        # ".hark"), so escape it before splicing it into the grep patterns below.
         HARK_DIR_RE=$(printf '%s' "$HARK_DIR" | sed 's/[.[\^$*+?()|{}]/\\&/g')
 
         added=$(jq -r '.[] | select(.status == "added") | .filename' "$FILES" |
@@ -142,7 +150,7 @@ runs:
         CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
         PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
-        HARK_DIR: ${{ inputs.path }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
         # Whitespace-separated logins
         EXEMPT_AUTHORS: "stripe-openapi[bot]"
         # Whitespace-separated branch names; a pull request into anything else is exempt

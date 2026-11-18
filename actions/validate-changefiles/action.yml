@@ -3,7 +3,7 @@ description: "Run `hark validate` over every changefile in the repository. Needs
 
 inputs:
   working-directory:
-    description: "Directory to run `hark validate` in, relative to the repo root"
+    description: "Directory containing the `.hark` directory, relative to the repo root"
     default: "."
 
 runs:

@@ -22,11 +22,8 @@ description: "Run all the changelog-specific validation a PR might need"
 # declare its own triggers.
 
 inputs:
-  path:
-    description: "The repo's hark directory, relative to the repo root"
-    default: ".hark"
   working-directory:
-    description: "Directory to run `hark validate` in, relative to the repo root"
+    description: "Directory containing the `.hark` directory, relative to the repo root"
     default: "."
 
 runs:
@@ -35,10 +32,10 @@ runs:
     # Ordered cheapest to most expensive
     - uses: $/actions/require-changefile
       with:
-        path: ${{ inputs.path }}/changes
+        working-directory: ${{ inputs.working-directory }}
     - uses: $/actions/require-migration-guide
       with:
-        path: ${{ inputs.path }}
+        working-directory: ${{ inputs.working-directory }}
     - uses: $/actions/validate-changefiles
       with:
         working-directory: ${{ inputs.working-directory }}

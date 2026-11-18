@@ -9,9 +9,9 @@ description: "Fail a pull request that adds no changefile, unless it opts out of
 #       types: [opened, synchronize, reopened, edited]
 
 inputs:
-  path:
-    description: "Directory changefiles live in, relative to the repo root"
-    default: ".hark/changes"
+  working-directory:
+    description: "Directory containing the `.hark` directory, relative to the repo root"
+    default: "."
 
 outputs:
   skipped:
@@ -31,6 +31,17 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+
+        # The `.hark` directory sits directly under the working directory
+        # (the repo root when it's "."), so this is its path relative to the repo root.
+        dir="${WORKING_DIRECTORY%/}"
+        dir="${dir#./}"
+        case "$dir" in
+          ""|.) HARK_DIR=".hark" ;;
+          *) HARK_DIR="${dir}/.hark" ;;
+        esac
+
+        CHANGEFILES_PATH="${HARK_DIR}/changes"
 
         # Lists the changefiles in one commit, from the API rather than a checkout. The trees
         # endpoint takes a `<sha>:<path>`, so this is a single request no matter how many
@@ -74,4 +85,4 @@ runs:
         GH_REPO: ${{ github.repository }}
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        CHANGEFILES_PATH: ${{ inputs.path }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
