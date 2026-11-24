@@ -5,6 +5,17 @@ fail() { printf '%s\n' "$*" >&2; exit 1; }
 output() { printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
 title='Version packages'
 
+read_version() {
+  local package=$1 name directory arg version
+  local -a args=()
+  name=$(jq -r '.name' <<< "$package")
+  directory=$(jq -r '.path' <<< "$package")
+  while IFS= read -r -d '' arg; do args+=("$arg"); done < <(jq -jr '.read[] | ., "\u0000"' <<< "$package")
+  version=$(cd -- "$directory" && HARK_RELEASE_PACKAGE="$name" "${args[@]}") || fail "Could not read version for $name"
+  [[ -n "$version" && "$version" != *[[:cntrl:]]* ]] || fail "Expected one version for $name"
+  printf '%s' "$version"
+}
+
 case "$1" in
   state)
     case "$MODE" in
@@ -63,7 +74,8 @@ case "$1" in
         . + ($release | if has("packages") then .packages else [] end
           | if type != "array" then error("release.packages must be an array") else . end
           | map(if (.name | type) == "string" and (.name | length) > 0
-                then {root: $root, name} else error("invalid package name") end))
+                then {root: $root, name, path: (.path // $root), read: .version.read}
+                else error("invalid package name") end))
       ' <<< "$packages")
       changes=$(cd -- "$root" && hark changes --unreleased)
       jq -e 'type == "array" and all(.[]; type == "string")' <<< "$changes" >/dev/null
@@ -73,6 +85,15 @@ case "$1" in
     done < "$configs"
     printf '%s\n' "$roots" > "$pending"
     if [[ "$roots" != '[]' ]]; then
+      before=$(mktemp "$RUNNER_TEMP/hark-versions.XXXXXXXX")
+      if [[ "$MODE" == update ]]; then
+        jq -e 'all(.[]; .read | type == "array" and length > 0 and .[0] != "" and all(.[]; type == "string" and (contains("\u0000") | not)))' \
+          <<< "$packages" >/dev/null || fail 'Each release package must configure version.read as a command array'
+        while IFS= read -r package; do
+          version=$(read_version "$package")
+          jq -c --arg version "$version" '. + {version: $version}' <<< "$package" >> "$before"
+        done < <(jq -c '.[]' <<< "$packages")
+      fi
       bash -euo pipefail -c "$PREPARE_COMMAND"' "$@"' hark-prepare "$pending" "$skipped"
     fi
     [[ $(git rev-parse HEAD) == "$BASE_SHA" ]] || fail 'The prepare command must not commit'
@@ -96,6 +117,25 @@ case "$1" in
     if [[ "$MODE" == check ]]; then
       [[ "$generated_tree" != "$base_tree" ]] || fail 'No release changes were generated'
       [[ "$generated_tree" == "$(git rev-parse "$HEAD_SHA^{tree}")" ]] || fail 'Release PR does not match the generated release tree'
+    elif [[ "$generated_tree" != "$base_tree" ]]; then
+      releases=$(mktemp "$RUNNER_TEMP/hark-releases.XXXXXXXX")
+      while IFS= read -r package; do
+        version=$(read_version "$package")
+        jq -ce --arg version "$version" --argjson skipped "$skipped_names" '
+          .name as $name | ($skipped | index($name) != null) as $skip
+          | if $skip and .version != $version then error("Preparation bumped skipped package: " + $name)
+            else {name, version: $version, skipped: $skip, changed: (.version != $version)} end
+        ' <<< "$package" >> "$releases"
+      done < "$before"
+      summary=$(mktemp "$RUNNER_TEMP/hark-summary.XXXXXXXX")
+      jq -rs '
+        def code: "<code>" + @html + "</code>";
+        def bullets: if length == 0 then "None." else join("\n") end;
+        sort_by(.name)
+        | ["## Packages to release", "", (map(select(.changed) | "- \(.name | code) at \(.version | code)") | bullets),
+           "", "## Skipped packages", "", (map(select(.skipped) | "- \(.name | code)") | bullets)] | join("\n")
+      ' "$releases" > "$summary"
+      output summary-path "$summary"
     fi
     output base-sha "$BASE_SHA"
     output epoch "$SOURCE_DATE_EPOCH"
@@ -109,8 +149,9 @@ case "$1" in
     fi
     live_base=$(gh api "repos/$GH_REPO/git/ref/heads/$BASE_BRANCH" --jq '.object.sha')
     [[ "$BASE_SHA" == "$live_base" ]] || fail 'The base branch advanced during preparation'
+    current='{}'
     if [[ -n "$PR_NUMBER" ]]; then
-      current=$(gh pr view "$PR_NUMBER" --json state,headRefOid,autoMergeRequest)
+      current=$(gh pr view "$PR_NUMBER" --json state,headRefOid,autoMergeRequest,body)
       jq -e --arg head "$OLD_HEAD_SHA" '.state == "OPEN" and .headRefOid == $head and .autoMergeRequest == null' <<< "$current" >/dev/null || fail 'The PR changed during preparation'
     fi
     if [[ "$TREE" == "$PROPOSAL_BASE_TREE" ]]; then
@@ -119,6 +160,19 @@ case "$1" in
       fi
       exit 0
     fi
+    body=$(mktemp "$RUNNER_TEMP/hark-release-body.XXXXXXXX")
+    jq -jr --rawfile summary "$SUMMARY_PATH" --arg initial "$PR_BODY" '
+      "<!-- hark-release-summary:start -->" as $start | "<!-- hark-release-summary:end -->" as $end
+      | ($start + "\n" + $summary + $end) as $section
+      | (.body // $initial) as $body
+      | if ($body | contains($start) or contains($end)) then
+          ($body | split($start)) as $parts
+          | if ($parts | length) != 2 or ($parts[0] | contains($end)) then error("Invalid Hark summary markers")
+            else ($parts[1] | split($end)) as $tail
+              | if ($tail | length) != 2 then error("Invalid Hark summary markers")
+                else $parts[0] + $section + $tail[1] end end
+        else $body + (if $body == "" then "" else "\n\n" end) + $section + "\n" end
+    ' <<< "$current" > "$body"
     if [[ -n "$OLD_HEAD_SHA" ]]; then
       existing=$(gh api "repos/$GH_REPO/git/commits/$OLD_HEAD_SHA" | jq -r '[.tree.sha, (.parents | map(.sha) | join(" "))] | @tsv')
     else
@@ -133,10 +187,10 @@ case "$1" in
         "https://github.com/$GH_REPO.git" "$commit:refs/heads/$HEAD_BRANCH"
     fi
     if [[ -z "$PR_NUMBER" ]]; then
-      body=$(mktemp "$RUNNER_TEMP/hark-release-body.XXXXXXXX")
-      printf '%s\n' "$PR_BODY" > "$body"
       url=$(gh pr create --base "$BASE_BRANCH" --head "$HEAD_BRANCH" --title "$title" --body-file "$body")
       PR_NUMBER=${url##*/}
+    elif ! jq -e --rawfile body "$body" '.body == $body' <<< "$current" >/dev/null; then
+      gh pr edit "$PR_NUMBER" --body-file "$body"
     fi
     output pull-request-number "$PR_NUMBER"
     ;;
