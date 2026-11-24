@@ -26,6 +26,10 @@ func Release(ctx context.Context, opts Options, release releases.Release) error 
 	if release.Version == "" {
 		return errors.New("release version is required")
 	}
+	config, err := readChangelogConfig(opts)
+	if err != nil {
+		return err
+	}
 
 	versionChannel, ok := releases.Channel(release.Version)
 	if !ok {
@@ -96,7 +100,7 @@ func Release(ctx context.Context, opts Options, release releases.Release) error 
 		}
 	}
 
-	return Build(ctx, opts)
+	return buildWithConfig(ctx, opts, config)
 }
 
 const migrationGuideTemplate = `# Migration guide for v%d

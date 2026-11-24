@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- add `hark changes --unreleased` and `hark changes --release VERSION` to list the changefiles in a release or the unreleased queue.
+- let repositories opt into hiding empty changelog releases without changing their release history.
+- add a reusable GitHub action to create or verify release PRs using a repository's version preparation command.
+
 ## 1.1.0
 
 - add `hark inspect` command to read changefile frontmatter and output JSON for each supplied file.  this output currently contains the `path` and `semver_level`.

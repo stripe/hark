@@ -1,0 +1,72 @@
+name: Prepare release PR
+description: Create or check a generated release pull request using the caller's preparation command
+
+inputs:
+  mode:
+    description: Either update or check
+    default: update
+  prepare-command:
+    description: Trusted shell command to run in the clean base checkout
+    required: true
+  base-branch:
+    description: Target branch for the release PR
+    default: master
+  head-branch:
+    description: Branch reserved for this action's generated release PR
+    default: release/version-packages
+  head-sha:
+    description: Proposed commit to verify in check mode (must already be fetched)
+    default: ''
+  token:
+    description: Caller-supplied pull request creator token, required in update mode
+    default: ''
+  expected-creator:
+    description: GitHub login that must own any existing release PR in update mode
+    default: ''
+
+outputs:
+  pull-request-number:
+    description: Number of the open release PR after update, if any
+    value: ${{ steps.update.outputs.pull-request-number }}
+
+runs:
+  using: composite
+  steps:
+    - id: state
+      shell: bash
+      run: bash "$ACTION_PATH/release-pr.sh" state
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        MODE: ${{ inputs.mode }}
+        BASE_BRANCH: ${{ inputs.base-branch }}
+        HEAD_BRANCH: ${{ inputs.head-branch }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        GH_TOKEN: ${{ inputs.token }}
+        GH_REPO: ${{ github.repository }}
+        EXPECTED_CREATOR: ${{ inputs.expected-creator }}
+    - id: prepare
+      if: steps.state.outputs.frozen != 'true'
+      shell: bash
+      run: bash "$ACTION_PATH/release-pr.sh" prepare
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        MODE: ${{ inputs.mode }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        PREPARE_COMMAND: ${{ inputs.prepare-command }}
+    - id: update
+      if: inputs.mode == 'update'
+      shell: bash
+      run: bash "$ACTION_PATH/release-pr.sh" update
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        BASE_BRANCH: ${{ inputs.base-branch }}
+        HEAD_BRANCH: ${{ inputs.head-branch }}
+        GH_TOKEN: ${{ inputs.token }}
+        GH_REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ steps.state.outputs.pull-request-number }}
+        OLD_HEAD_SHA: ${{ steps.state.outputs.old-head-sha }}
+        FROZEN: ${{ steps.state.outputs.frozen }}
+        BASE_SHA: ${{ steps.prepare.outputs.base-sha }}
+        TREE: ${{ steps.prepare.outputs.tree }}
+        RESULT: ${{ steps.prepare.outputs.result }}
+        EPOCH: ${{ steps.prepare.outputs.epoch }}

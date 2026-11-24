@@ -7,6 +7,11 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
+	"strconv"
+	"time"
+
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
@@ -19,7 +24,8 @@ type globalFlags struct {
 	workers int
 
 	// fs is the filesystem CLI commands operate on. Nil means the real one.
-	fs afero.Fs
+	fs  afero.Fs
+	now func() time.Time
 }
 
 // options turns the parsed flags into the Options that internal/changelog takes,
@@ -28,6 +34,7 @@ func (g *globalFlags) options(cmd *cobra.Command) changelog.Options {
 	return changelog.Options{
 		Fs:          g.fs,
 		Out:         cmd.OutOrStdout(),
+		Now:         g.now,
 		ReadOptions: changefile.ReadOptions{Workers: g.workers},
 	}
 }
@@ -41,6 +48,18 @@ func newRootCmd(version string, fs afero.Fs) *cobra.Command {
 		Use:     "hark",
 		Short:   "Validate and compile changefiles into a changelog",
 		Version: version,
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+			epoch, ok := os.LookupEnv("SOURCE_DATE_EPOCH")
+			if !ok {
+				return nil
+			}
+			seconds, err := strconv.ParseInt(epoch, 10, 64)
+			if err != nil || seconds < 0 || seconds > 253402300799 {
+				return fmt.Errorf("invalid SOURCE_DATE_EPOCH %q", epoch)
+			}
+			g.now = func() time.Time { return time.Unix(seconds, 0).UTC() }
+			return nil
+		},
 	}
 
 	root.PersistentFlags().IntVar(&g.workers, "workers", 0,
@@ -52,6 +71,7 @@ func newRootCmd(version string, fs afero.Fs) *cobra.Command {
 		newBuildCmd(g),
 		newValidateCmd(g),
 		newInspectCmd(g),
+		newChangesCmd(g),
 	)
 
 	return root

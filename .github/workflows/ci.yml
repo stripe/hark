@@ -54,3 +54,4 @@ jobs:
         with:
           go-version-file: go.mod
       - run: just test
+      - run: just test-release-action

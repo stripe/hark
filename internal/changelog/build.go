@@ -19,10 +19,27 @@ import (
 // Versions are rendered based on their position in `releases.json`.
 func Build(ctx context.Context, opts Options) error {
 	opts = opts.withDefaults()
+	config, err := readChangelogConfig(opts)
+	if err != nil {
+		return err
+	}
+	return buildWithConfig(ctx, opts, config)
+}
 
+func buildWithConfig(ctx context.Context, opts Options, config changelogConfig) error {
 	releaseFile, releaseGroups, err := loadAllData(ctx, opts)
 	if err != nil {
 		return err
+	}
+
+	if config.HideEmptyReleases {
+		visible := releaseGroups[:0]
+		for _, group := range releaseGroups {
+			if group.Release == nil || len(group.Changes) > 0 || group.preamble() != "" {
+				visible = append(visible, group)
+			}
+		}
+		releaseGroups = visible
 	}
 
 	var buf bytes.Buffer

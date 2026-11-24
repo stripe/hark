@@ -73,7 +73,7 @@ func TestHelpListsAllCommands(t *testing.T) {
 	out, err := run(t, "--help")
 	require.NoError(t, err)
 
-	for _, name := range []string{"new", "release", "build", "validate", "inspect"} {
+	for _, name := range []string{"new", "release", "build", "validate", "inspect", "changes"} {
 		assert.Contains(t, out, name)
 	}
 }
@@ -107,6 +107,86 @@ func TestInspectRequiresArguments(t *testing.T) {
 	stdout, _, err := runFsStreams(t, fs, "inspect")
 	require.Error(t, err)
 	assert.Empty(t, stdout)
+}
+
+func TestChangesSelectsAndComposesWithInspect(t *testing.T) {
+	fs := harkFs(t)
+	first := ".hark/changes/2024-01-16_bot_first.change.md"
+	second := ".hark/changes/sub/2024-01-17_bot_second.change.md"
+	for _, path := range []string{second, first, "packages/example/.hark/changes/other.change.md"} {
+		require.NoError(t, afero.WriteFile(fs, path, []byte("---\ntitle: New feature\nsemver_level: minor\n---\n"), 0o644))
+	}
+	stdout, stderr, err := runFsStreams(t, fs, "changes", "--unreleased")
+	require.NoError(t, err)
+	assert.Empty(t, stderr)
+	var paths []string
+	require.NoError(t, json.Unmarshal([]byte(stdout), &paths))
+	require.Equal(t, []string{first, second}, paths)
+	stdout, _, err = runFsStreams(t, fs, append([]string{"inspect"}, paths...)...)
+	require.NoError(t, err)
+	assert.Contains(t, stdout, `"semver_level":"minor"`)
+
+	stdout, _, err = runFsStreams(t, fs, "changes", "--release", "1.0.0")
+	require.NoError(t, err)
+	assert.JSONEq(t, `[".hark/changes/2024-01-14_xavdid_did-thing.change.md"]`, stdout)
+}
+
+func TestChangesEmptyAndInvalid(t *testing.T) {
+	fs := harkFs(t)
+	require.NoError(t, fs.RemoveAll(".hark/changes"))
+	for _, args := range [][]string{{"--unreleased"}, {"--release", "1.0.0"}} {
+		stdout, _, err := runFsStreams(t, fs, append([]string{"changes"}, args...)...)
+		require.NoError(t, err)
+		assert.Equal(t, "[]\n", stdout)
+	}
+	for _, args := range [][]string{nil, {"--release", "1.2.3"}, {"--unreleased", "--release", "1.0.0"}} {
+		stdout, _, err := runFsStreams(t, fs, append([]string{"changes"}, args...)...)
+		require.Error(t, err)
+		assert.Empty(t, stdout)
+	}
+	require.NoError(t, afero.WriteFile(fs, ".hark/changes/bad.change.md", []byte("malformed"), 0o644))
+	stdout, stderr, err := runFsStreams(t, fs, "changes", "--unreleased")
+	require.Error(t, err)
+	assert.Empty(t, stdout)
+	assert.Contains(t, stderr, "bad.change.md")
+}
+
+func TestHideEmptyReleases(t *testing.T) {
+	fs := harkFs(t)
+	ledger := []byte(`{"metadata":{"language":"go","channel":"ga"},"releases":[` +
+		`{"version":"1.3.0","released_on":"2024-01-18","pinned_api_version":"2024-01-01"},` +
+		`{"version":"1.2.0","released_on":"2024-01-17","pinned_api_version":"2024-01-01"},` +
+		`{"version":"1.1.0","released_on":"2024-01-16","pinned_api_version":"2023-01-01"},` +
+		`{"version":"1.0.0","released_on":"2024-01-15","pinned_api_version":"2023-01-01"}]}`)
+	require.NoError(t, afero.WriteFile(fs, ".hark/releases.json", ledger, 0o644))
+	require.NoError(t, afero.WriteFile(fs, ".hark/intros/intro-1.1.0.md", []byte("Release introduction.\n"), 0o644))
+	_, err := runFs(t, fs, "build")
+	require.NoError(t, err)
+	defaultChangelog, err := afero.ReadFile(fs, "CHANGELOG.md")
+	require.NoError(t, err)
+	assert.Contains(t, string(defaultChangelog), "1.3.0")
+	require.NoError(t, afero.WriteFile(fs, ".hark/config.json", []byte(`{"changelog":{"hideEmptyReleases":true},"release":{}}`), 0o644))
+	_, err = runFs(t, fs, "build")
+	require.NoError(t, err)
+	changelog, err := afero.ReadFile(fs, "CHANGELOG.md")
+	require.NoError(t, err)
+	assert.NotContains(t, string(changelog), "1.3.0")
+	assert.Contains(t, string(changelog), "1.2.0")
+	assert.Contains(t, string(changelog), "pinned API version to `2024-01-01`")
+	assert.Contains(t, string(changelog), "Release introduction.")
+	assert.Contains(t, string(changelog), "Did a thing")
+	currentLedger, err := afero.ReadFile(fs, ".hark/releases.json")
+	require.NoError(t, err)
+	assert.Equal(t, ledger, currentLedger)
+
+	_, err = runFs(t, fs, "release", "1.4.0")
+	require.NoError(t, err)
+	changelog, err = afero.ReadFile(fs, "CHANGELOG.md")
+	require.NoError(t, err)
+	assert.NotContains(t, string(changelog), "1.4.0")
+	currentLedger, err = afero.ReadFile(fs, ".hark/releases.json")
+	require.NoError(t, err)
+	assert.Contains(t, string(currentLedger), "1.4.0")
 }
 
 func TestInspectFailureWritesNoJSONAndNamesPath(t *testing.T) {
