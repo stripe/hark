@@ -43,25 +43,64 @@ case "$1" in
       export SOURCE_DATE_EPOCH
       SOURCE_DATE_EPOCH=$(date +%s)
     fi
-    export HARK_PREPARE_RESULT
-    HARK_PREPARE_RESULT=$(mktemp "$RUNNER_TEMP/hark-prepare.XXXXXXXX")
-    bash -euo pipefail -c "$PREPARE_COMMAND"
+    pending=$(mktemp "$RUNNER_TEMP/hark-pending.XXXXXXXX")
+    skipped=$(mktemp "$RUNNER_TEMP/hark-skipped.XXXXXXXX")
+    configs=$(mktemp "$RUNNER_TEMP/hark-configs.XXXXXXXX")
+    git ls-files -z -- '.hark/config.json' ':(glob)**/.hark/config.json' > "$configs"
+    roots='[]'
+    packages='[]'
+    while IFS= read -r -d '' config; do
+      root=$(dirname "$(dirname "$config")")
+      [[ ! -L "$config" ]] || fail "Release configuration must be a regular file: $config"
+      release=$(jq -c '
+        if type != "object" then error("expected config object")
+        elif has("release") | not then null
+        elif (.release | type) != "object" then error("release must be an object")
+        else .release end
+      ' "$config")
+      [[ "$release" != null ]] || continue
+      packages=$(jq -ce --arg root "$root" --argjson release "$release" '
+        . + ($release | if has("packages") then .packages else [] end
+          | if type != "array" then error("release.packages must be an array") else . end
+          | map(if (.name | type) == "string" and (.name | length) > 0
+                then {root: $root, name} else error("invalid package name") end))
+      ' <<< "$packages")
+      changes=$(cd -- "$root" && hark changes --unreleased)
+      jq -e 'type == "array" and all(.[]; type == "string")' <<< "$changes" >/dev/null
+      if jq -e 'length > 0' <<< "$changes" >/dev/null; then
+        roots=$(jq -ce --arg root "$root" --argjson changes "$changes" '. + [{root: $root, changefiles: $changes}]' <<< "$roots")
+      fi
+    done < "$configs"
+    printf '%s\n' "$roots" > "$pending"
+    if [[ "$roots" != '[]' ]]; then
+      bash -euo pipefail -c "$PREPARE_COMMAND"' "$@"' hark-prepare "$pending" "$skipped"
+    fi
     [[ $(git rev-parse HEAD) == "$BASE_SHA" ]] || fail 'The prepare command must not commit'
-    jq -e 'type == "object" and (.body | type == "string") and (.packages | type == "array" and all(.[]; (.name | type == "string") and (.from | type == "string") and (.to | type == "string")))' "$HARK_PREPARE_RESULT" >/dev/null
     git add -A
     generated_tree=$(git write-tree)
-    if jq -e '.packages == []' "$HARK_PREPARE_RESULT" >/dev/null; then
-      [[ "$generated_tree" == "$base_tree" && "$MODE" == update ]] || fail 'No packages selected for a changed tree or a release PR'
-    else
-      [[ "$generated_tree" != "$base_tree" ]] || fail 'Packages selected without any changes'
-    fi
+    skipped_names='[]'
+    while IFS= read -r name || [[ -n "$name" ]]; do
+      jq -e --arg name "$name" 'any(.[]; .name == $name)' <<< "$packages" >/dev/null || fail "Unknown skipped package: $name"
+      skipped_names=$(jq -ce --arg name "$name" '. + [$name]' <<< "$skipped_names")
+      printf 'Skipping release of %s\n' "$name"
+    done < "$skipped"
+    skipped_roots=$(mktemp "$RUNNER_TEMP/hark-skipped-roots.XXXXXXXX")
+    jq -jr --argjson skipped "$skipped_names" '
+      group_by(.root)[] | select(all(.[]; .name as $name | $skipped | index($name) != null))
+      | .[0].root, "\u0000"
+    ' <<< "$packages" > "$skipped_roots"
+    while IFS= read -r -d '' root; do
+      git --literal-pathspecs diff --cached --quiet -- "$root/.hark/changes" "$root/.hark/releases.json" \
+        || fail "Preparation changed Hark release records for skipped root: $root"
+    done < "$skipped_roots"
     if [[ "$MODE" == check ]]; then
+      [[ "$generated_tree" != "$base_tree" ]] || fail 'No release changes were generated'
       [[ "$generated_tree" == "$(git rev-parse "$HEAD_SHA^{tree}")" ]] || fail 'Release PR does not match the generated release tree'
     fi
     output base-sha "$BASE_SHA"
     output epoch "$SOURCE_DATE_EPOCH"
     output tree "$generated_tree"
-    output result "$HARK_PREPARE_RESULT"
+    output base-tree "$base_tree"
     ;;
   update)
     if [[ "$FROZEN" == true ]]; then
@@ -74,7 +113,7 @@ case "$1" in
       current=$(gh pr view "$PR_NUMBER" --json state,headRefOid,autoMergeRequest)
       jq -e --arg head "$OLD_HEAD_SHA" '.state == "OPEN" and .headRefOid == $head and .autoMergeRequest == null' <<< "$current" >/dev/null || fail 'The PR changed during preparation'
     fi
-    if jq -e '.packages == []' "$RESULT" >/dev/null; then
+    if [[ "$TREE" == "$PROPOSAL_BASE_TREE" ]]; then
       if [[ -n "$PR_NUMBER" ]]; then
         gh pr close "$PR_NUMBER"
       fi
@@ -93,11 +132,9 @@ case "$1" in
         "--force-with-lease=refs/heads/$HEAD_BRANCH:$OLD_HEAD_SHA" \
         "https://github.com/$GH_REPO.git" "$commit:refs/heads/$HEAD_BRANCH"
     fi
-    body=$(mktemp "$RUNNER_TEMP/hark-release-body.XXXXXXXX")
-    jq -r '.body' "$RESULT" > "$body"
-    if [[ -n "$PR_NUMBER" ]]; then
-      gh pr edit "$PR_NUMBER" --body-file "$body"
-    else
+    if [[ -z "$PR_NUMBER" ]]; then
+      body=$(mktemp "$RUNNER_TEMP/hark-release-body.XXXXXXXX")
+      printf '%s\n' "$PR_BODY" > "$body"
       url=$(gh pr create --base "$BASE_BRANCH" --head "$HEAD_BRANCH" --title "$title" --body-file "$body")
       PR_NUMBER=${url##*/}
     fi
