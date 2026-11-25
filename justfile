@@ -9,11 +9,14 @@ _default:
     just --list --unsorted
 
 # run every check CI runs, so a green run here means a green run there
-prepare: test format lint (zizmor "-qq")
+prepare: test test-release-action format lint (zizmor "-qq")
 
 # run all unit tests
 test *args="./...":
     go test -race {{ args }}
+
+test-release-action:
+    bash actions/release-pr/test.sh
 
 # build the binary for local development
 build:

@@ -19,7 +19,9 @@ Each user-facing PR needs a corresponding `.change.md` file. Create one by runni
 
 ### Inspecting changefile semver levels
 
-Automation can inspect explicitly selected changefiles with Hark's own front-matter parser:
+Use `hark changes --unreleased` or `hark changes --release 1.2.3` to list changefiles in the current Hark root. The result is a sorted JSON array of relative paths. A release recorded in `.hark/releases.json` with no changefiles returns `[]`; an unknown release returns an error.
+
+Automation can pass those paths to `hark inspect`, or inspect explicitly selected changefiles with Hark's own front-matter parser:
 
 ```sh
 hark inspect .hark/changes/example.change.md
@@ -37,6 +39,10 @@ hark inspect "${changefiles[@]}" | jq -e '.[] | select(.semver_level == "major")
 ```
 
 ### Releasing versions
+
+Set `{"changelog":{"hideEmptyReleases":true}}` in `.hark/config.json` to omit released versions that have no changes, visible intro, or API pin notice. This does not remove them from the release ledger. The setting is optional and defaults to `false`. A package in a Git repository inherits the root config if it has no local config of its own.
+
+`hark release` and `hark new` use the current date by default. To reproduce a release proposal, set `SOURCE_DATE_EPOCH` to its original preparation time in Unix seconds; Hark uses that UTC date.
 
 `hark release VERSION` adds a new entry to `releases.json` and populates information (e.g. pinned api version).
 
