@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/stripe/hark/changefile"
 	"github.com/stripe/hark/releases"
@@ -42,5 +43,6 @@ func Changes(ctx context.Context, opts Options, version string) error {
 		}
 		paths = append(paths, filepath.ToSlash(path))
 	}
+	slices.Sort(paths)
 	return json.NewEncoder(opts.Out).Encode(paths)
 }

@@ -112,7 +112,7 @@ func TestInspectRequiresArguments(t *testing.T) {
 func TestChangesSelectsAndComposesWithInspect(t *testing.T) {
 	fs := harkFs(t)
 	first := ".hark/changes/2024-01-16_bot_first.change.md"
-	second := ".hark/changes/sub/2024-01-17_bot_second.change.md"
+	second := ".hark/changes/2024-01-16_bot_first/2024-01-17_bot_second.change.md"
 	for _, path := range []string{second, first, "packages/example/.hark/changes/other.change.md"} {
 		require.NoError(t, afero.WriteFile(fs, path, []byte("---\ntitle: New feature\nsemver_level: minor\n---\n"), 0o644))
 	}

@@ -21,11 +21,16 @@ func readChangelogConfig(opts Options) (changelogConfig, error) {
 	path := filepath.Join(root, HarkDir, "config.json")
 	data, err := afero.ReadFile(opts.Fs, path)
 	if os.IsNotExist(err) {
-		absolute, absErr := filepath.Abs(root)
-		if absErr != nil {
-			return config.Changelog, absErr
+		start := filepath.Clean(root)
+		// Only the OS filesystem resolves relative paths against the process's working directory.
+		if _, ok := opts.Fs.(*afero.OsFs); ok {
+			absolute, absErr := filepath.Abs(root)
+			if absErr != nil {
+				return config.Changelog, absErr
+			}
+			start = absolute
 		}
-		for candidate := absolute; ; candidate = filepath.Dir(candidate) {
+		for candidate := start; ; candidate = filepath.Dir(candidate) {
 			if _, statErr := opts.Fs.Stat(filepath.Join(candidate, ".git")); statErr == nil {
 				path = filepath.Join(candidate, HarkDir, "config.json")
 				data, err = afero.ReadFile(opts.Fs, path)
